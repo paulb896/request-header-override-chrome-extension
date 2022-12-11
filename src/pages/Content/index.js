@@ -1,6 +1,9 @@
-import { printLine } from './modules/print';
 
-console.log('Content script works!');
-console.log('Must reload extension for modifications to take effect.');
+var s = document.createElement('script');
+s.src = chrome.runtime.getURL('addHttpInterceptors.bundle.js');
+s.onload = function () {
+  this.remove();
+};
 
-printLine("Using the 'printLine' function from the Print Module");
+// TODO: Move this to head script or even a background task
+(document.documentElement).appendChild(s);

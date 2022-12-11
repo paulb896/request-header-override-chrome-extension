@@ -1,5 +1,5 @@
 chrome.devtools.panels.create(
-  'Dev Tools from chrome-extension-boilerplate-react',
-  'icon-34.png',
+  'Dev Tools from request-header-overrides',
+  'main-icon-48.png',
   'panel.html'
 );
