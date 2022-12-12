@@ -1,10 +1,21 @@
 XMLHttpRequest.prototype.realSend = XMLHttpRequest.prototype.send;
+
+XMLHttpRequest.prototype.realOpen = XMLHttpRequest.prototype.open;
+
+var newOpen = function (method, URL, options) {
+
+  this.URL = URL;
+  this.realOpen(method, URL, options);
+};
+XMLHttpRequest.prototype.open = newOpen;
+
 var newSend = function (vData) {
   const headerOverrides = JSON.parse(document.body.getAttribute('header-overrides'));
+  const url = this.URL || this.__sentry_xhr__.url && this.__sentry_xhr__.url.toString();
 
   if (headerOverrides) {
     headerOverrides.map(header => {
-      if (header.enabled && this.__sentry_xhr__.url && this.__sentry_xhr__.url.toString().includes(header.urlRegex)) {
+      if (header.enabled && url.includes(header.urlRegex)) {
         this.setRequestHeader(header.name, header.value);
       }
     });

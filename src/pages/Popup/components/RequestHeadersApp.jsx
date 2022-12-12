@@ -47,6 +47,13 @@ function RequestHeadersApp(props) {
     saveRequestHeaders(updatedHeaders);
   }
 
+  function enableAllHandler() {
+    const updatedHeaders = headers.map(header => ({ ...header, enabled: true }));
+
+    setHeaders(updatedHeaders);
+    saveRequestHeaders(updatedHeaders);
+  }
+
   function editHeader(id, newName, newValue, newUrlRegex) {
     const editedHeaderList = headers.map(header => {
       // if this header has the same ID as the edited header
@@ -117,6 +124,9 @@ function RequestHeadersApp(props) {
       </h3>
       <button className="btn btn__primary btn__sm" onClick={disableAllHandler}>
         Disable All
+      </button>&nbsp;
+      <button className="btn btn__primary btn__sm" onClick={enableAllHandler}>
+        Enable All
       </button>
       <hr />
       <ul
