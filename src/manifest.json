@@ -32,7 +32,6 @@
     }
   ],
   "permissions": [
-    "scripting",
     "storage"
   ],
   "host_permissions": [
