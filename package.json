@@ -1,6 +1,6 @@
 {
   "name": "request-header-override-chrome-extension",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A chrome extension for overriding external http request headers",
   "license": "MIT",
   "scripts": {
