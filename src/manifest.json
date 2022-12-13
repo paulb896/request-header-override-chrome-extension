@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "request-header-override-chrome-extension",
-  "version": "0.0.2",
+  "version": "0.0.1",
   "description": "A chrome extension for overriding external http request headers",
   "options_page": "options.html",
   "action": {
