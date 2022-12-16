@@ -16,7 +16,7 @@ const updateOverrideHeaders = (headerOverrides, removeRuleIds = []) => {
   if (removeRuleIds.length) {
     chrome.declarativeNetRequest.updateDynamicRules({
       removeRuleIds
-    }, () => console.log(`rules have been saved for ${JSON.stringify(header)}`));
+    }, () => console.log(`rules have been removed for ${JSON.stringify(removeRuleIds)}`));
   } else {
     headerOverrides.map(header => {
       if (header.enabled || removeRuleIds.length) {
@@ -126,7 +126,7 @@ function RequestHeadersApp(props) {
   }
 
   function addHeader(name, value) {
-    const MAX_HEADER_ID = 9999999999;
+    const MAX_HEADER_ID = 9999999;
     const newHeader = { id: generateRandomInteger(MAX_HEADER_ID), name, value, enabled: false, urlRegex: '' };
     const newHeaders = [newHeader, ...headers];
 
