@@ -1,6 +1,6 @@
 {
   "name": "request-header-override-chrome-extension",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A chrome extension for overriding external http request headers",
   "license": "MIT",
   "scripts": {
@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@hot-loader/react-dom": "17.0.2",
-    "nanoid": "4.0.0",
     "react": "17.0.2",
     "react-dom": "17.0.2",
     "react-hot-loader": "4.13.1"

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "request-header-override-chrome-extension",
-  "version": "0.0.1",
+  "name": "Request Header Override Manifest Version 3",
+  "version": "0.0.2",
   "description": "A chrome extension for overriding external http request headers",
   "options_page": "options.html",
   "action": {
@@ -10,42 +10,18 @@
     "default_icon": {
       "38": "main-icon-38.png"
     },
-    "default_title": "Modify Outgoing Request Headers"
+    "default_title": "Modify Outgoing XHR/Fetch Request Headers"
   },
   "icons": {
     "128": "main-icon-128.png"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "background.bundle.js",
-        "contentScript.bundle.js",
-        "addHttpInterceptors.bundle.js"
-      ],
-      "css": [
-        "content.styles.css"
-      ]
-    }
-  ],
   "permissions": [
-    "storage"
+    "storage",
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
-  "devtools_page": "devtools.html",
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "addHttpInterceptors.bundle.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ]
+  "devtools_page": "devtools.html"
 }

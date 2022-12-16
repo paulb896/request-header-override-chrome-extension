@@ -103,7 +103,6 @@ export default function RequestHeader(props) {
         <input
           id={props.id}
           type="checkbox"
-          defaultChecked={props.enabled}
           checked={props.enabled}
           onChange={() => props.toggleHeaderEnabled(props.id)}
         />
