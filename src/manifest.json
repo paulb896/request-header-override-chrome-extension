@@ -13,7 +13,7 @@
     "default_title": "Modify Outgoing XHR/Fetch Request Headers and Query Params"
   },
   "icons": {
-    "128": "main-icon-128.png"
+    "128": "main-icon-128.jpg"
   },
   "permissions": [
     "storage",

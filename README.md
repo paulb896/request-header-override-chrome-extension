@@ -1,4 +1,4 @@
-<img src="src/assets/img/main-icon-128.png" width="128"/>
+<img src="src/assets/img/main-icon-128.jpg" width="128"/>
 
 # HTTP Request Header/Query Param Override Chrome Extension
 
