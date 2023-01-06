@@ -12,6 +12,31 @@ function usePrevious(value) {
 
 let loadedFromStorage = false;
 
+function getAction(header) {
+  if (header.overrideType === 'requestQueryParam') {
+    return {
+      type: 'redirect',
+      redirect: {
+        transform: {
+          queryTransform: {
+            addOrReplaceParams: [{
+              key: header.name,
+              value: header.value
+            }]
+          }
+        }
+      }
+    };
+  }
+
+  return {
+    type: 'modifyHeaders',
+    requestHeaders: [
+      { header: header.name, operation: 'set', value: header.value }
+    ]
+  };
+}
+
 const updateOverrideHeaders = (headerOverrides, removeRuleIds = []) => {
   if (removeRuleIds.length) {
     chrome.declarativeNetRequest.updateDynamicRules({
@@ -25,12 +50,7 @@ const updateOverrideHeaders = (headerOverrides, removeRuleIds = []) => {
             {
               id: header.id,
               priority: 1,
-              action: {
-                type: 'modifyHeaders',
-                requestHeaders: [
-                  { header: header.name, operation: 'set', value: header.value }
-                ]
-              },
+              action: getAction(header),
               condition: { urlFilter: header.urlFilter, resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest', 'other'] }
             }
           ],
@@ -91,11 +111,11 @@ function RequestHeadersApp(props) {
     saveRequestHeaders(updatedHeaders);
   }
 
-  function editHeader(id, newName, newValue, newUrlRegex) {
+  function editHeader(id, name, value, urlRegex, overrideType) {
     const editedHeaderList = headers.map(header => {
       // if this header has the same ID as the edited header
       if (id === header.id) {
-        return { ...header, name: newName, value: newValue, urlRegex: newUrlRegex }
+        return { ...header, name, value, urlRegex, overrideType }
       }
       return header;
     });
@@ -112,6 +132,7 @@ function RequestHeadersApp(props) {
         value={header.value}
         enabled={header.enabled}
         url-regex={header.urlRegex}
+        overrideType={header.overrideType || 'header'}
         key={header.id}
         toggleHeaderEnabled={toggleHeaderEnabled}
         deleteHeader={deleteHeader}
@@ -125,9 +146,9 @@ function RequestHeadersApp(props) {
     return Math.floor(Math.random() * max) + 1;
   }
 
-  function addHeader(name, value) {
+  function addHeader(name, value, overrideType) {
     const MAX_HEADER_ID = 9999999;
-    const newHeader = { id: generateRandomInteger(MAX_HEADER_ID), name, value, enabled: false, urlRegex: '' };
+    const newHeader = { id: generateRandomInteger(MAX_HEADER_ID), name, value, enabled: false, urlRegex: '', overrideType };
     const newHeaders = [newHeader, ...headers];
 
     setHeaders(newHeaders);

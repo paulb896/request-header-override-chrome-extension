@@ -25,7 +25,7 @@ h2 {
 }
 
 hr {
-  border-top: 1px dashed white;
+  border-top: 1px solid rgb(64, 99, 118);
   border-bottom: none;
 }
 
@@ -71,6 +71,10 @@ input {
 
 input[type="text"] {
   border-radius: 0;
+}
+
+.input__radio {
+  cursor: pointer;
 }
 
 body {
@@ -243,6 +247,14 @@ code {
   text-align: center;
 }
 
+.label__radio {
+  line-height: 1.01567;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  display: block;
+  text-align: left;
+}
+
 .input__lg {
   padding: 2rem;
   border: 2px solid #000;
@@ -251,6 +263,11 @@ code {
 .input__lg:focus {
   border-color: #4d4d4d;
   box-shadow: inset 0 0 0 2px;
+}
+
+.overrideType {
+  margin-top: 1rem;
+  display: block;
 }
 
 [class*="__lg"] {
@@ -279,6 +296,7 @@ code {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 
 .request-header>* {

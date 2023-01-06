@@ -13,6 +13,7 @@ export default function RequestHeader(props) {
   const [newName, setNewName] = useState(props.name);
   const [newValue, setNewValue] = useState(props.value);
   const [newUrlRegex, setUrlRegex] = useState(props['url-regex']);
+  const [overrideType, setOverrideType] = useState(props.overrideType);
 
   const editFieldRef = useRef(null);
   const editButtonRef = useRef(null);
@@ -31,16 +32,29 @@ export default function RequestHeader(props) {
     setUrlRegex(e.target.value);
   }
 
+  function handleRequestOverrideTypeChange(e) {
+    setOverrideType(e.target.value);
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     if (!newName.trim()) {
       return;
     }
-    props.editHeader(props.id, newName, newValue, newUrlRegex);
+    props.editHeader(props.id, newName, newValue, newUrlRegex, overrideType);
     setNewName('');
     setNewValue('');
     setUrlRegex('');
+    setOverrideType('header');
     setEditing(false);
+  }
+
+  function overrideTypeDisplayName(overrideType) {
+    if (overrideType === 'header') {
+      return 'Header';
+    } else {
+      return 'Query Param'
+    }
   }
 
   const editingTemplate = (
@@ -79,6 +93,14 @@ export default function RequestHeader(props) {
           onChange={handleUrlRegexChange}
           ref={editFieldRef}
         />
+        <div>
+          <label className="input label__radio input__radio">
+            <input onChange={handleRequestOverrideTypeChange} type="radio" value="header" name="overrideType" checked={overrideType === "header"} /> Header Param
+          </label>
+          <label className="input label__radio input__radio">
+            <input onChange={handleRequestOverrideTypeChange} type="radio" value="requestQueryParam" name="overrideType" checked={overrideType === "requestQueryParam"} /> Request Query Param
+          </label>
+        </div>
       </div>
       <div className="btn-group">
         <button
@@ -108,6 +130,9 @@ export default function RequestHeader(props) {
         />
         <label className="request-header-label" htmlFor={props.id}>
           {props.name} : {props.value} - <b>{props['url-regex']}</b>
+          <b className="overrideType">
+            {overrideTypeDisplayName(props.overrideType || 'header')}
+          </b>
         </label>
       </div>
       <div className="btn-group">
@@ -147,6 +172,7 @@ export default function RequestHeader(props) {
     setNewName(props.name);
     setNewValue(props.value);
     setUrlRegex(props['url-regex']);
+    setOverrideType(props.overrideType);
   }, [props.name, props.value, props['url-regex'], props.enabled])
 
   return <li className="request-header">{isEditing ? editingTemplate : viewTemplate}</li>;

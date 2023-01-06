@@ -1,16 +1,16 @@
 <img src="src/assets/img/main-icon-128.png" width="128"/>
 
-# HTTP Request Header Overrides Chrome Extension
+# HTTP Request Header/Query Param Override Chrome Extension
 
 [Chrome Extension Webpage](https://chrome.google.com/webstore/detail/request-header-override-m/cfgjehpalgepkcfekgjgmklehchiidgi?hl=en).
 
-The extension allows the user to manage request headers that will be injected into requests made when viewing a website in chrome, where each header contains the following properties:
+The extension allows the user to manage request headers/query params that will be injected into requests made when viewing a website in chrome, where each override contains the following properties:
 
-* Header Name: Header key.
-* Header Value: Value associated with the header key.
+* Header/Query Param: Header key.
+* Header/Query Param Value: Value associated with the header key.
 * AJAX Request URL sub-string: The header name: value will only be applied to XHR/Fetch requests where the external request URL contains the provided substring.
 
-The headers are managed in the chrome extension popup (a simple react app), and saved to chrome local storage and are applied to upstream page requests using the chrome declarativeNetRequest request dynamic rules updateDynamicRules function.
+The headers/query param overrides are managed in the chrome extension popup (a simple react app), and saved to chrome local storage and are applied to upstream page requests using the chrome declarativeNetRequest request dynamic rules updateDynamicRules function.
 
 ## Local Development
 
