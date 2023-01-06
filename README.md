@@ -1,6 +1,6 @@
-<img src="src/assets/img/main-icon-128.jpg" width="128"/>
-
 # HTTP Request Header/Query Param Override Chrome Extension
+
+<img src="src/assets/img/example-screenshot.png" width="300"/>
 
 [Chrome Extension Webpage](https://chrome.google.com/webstore/detail/request-header-override-m/cfgjehpalgepkcfekgjgmklehchiidgi?hl=en).
 
