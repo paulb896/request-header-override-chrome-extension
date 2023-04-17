@@ -171,7 +171,19 @@ function RequestHeadersApp(props) {
     if (chrome.storage) {
       if (!loadedFromStorage) {
         chrome.storage.local.get(["requestHeaders"]).then(response => {
-          setHeaders(JSON.parse(response.requestHeaders))
+          const requestOverrides = JSON.parse(response.requestHeaders);
+          setHeaders(requestOverrides);
+
+          // Remove rules that don't match overrides in local storage
+          chrome.declarativeNetRequest.getDynamicRules((rules) => {
+            rules.forEach(rule => {
+              if (!requestOverrides.find((requestOverride) => requestOverride.id === rule.id)) {
+                chrome.declarativeNetRequest.updateDynamicRules({
+                  removeRuleIds: [rule.id]
+                })
+              }
+            })
+          });
         })
         loadedFromStorage = true;
       }
