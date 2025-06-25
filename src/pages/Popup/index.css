@@ -1,4 +1,3 @@
-/* RESETS */
 *,
 *::before,
 *::after {
@@ -14,7 +13,6 @@ html {
   font: 62.5% / 1.15 sans-serif;
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
 html::-webkit-scrollbar {
   display: none;
 }
@@ -205,9 +203,6 @@ code {
   margin-top: 1.2rem;
 }
 
-
-
-/* END GLOBAL STYLES */
 .request-header-app {
   margin: 0rem 0 4rem 0;
   padding: 1rem;
@@ -291,16 +286,103 @@ code {
   margin: unset auto;
 }
 
-/* Request Header item styles */
 .request-header {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  overflow-wrap: anywhere;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
 }
 
-.request-header>* {
-  flex: 0 0 100%;
+/* Header name with checkbox on same line */
+.header-name-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.header-name {
+  font-weight: bold;
+  font-size: 1.4rem;
+  color: #ddd;
+  word-break: break-word;
+  letter-spacing: 0.01em;
+  flex: 1;
+}
+
+/* Header info layout - no indentation */
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  width: 100%;
+}
+
+.header-value-container {
+  max-height: 80px;
+  overflow: hidden;
+  border: 1px solid #bdbdbd;
+  border-radius: 4px;
+  background-color: #132F45;
+  position: relative;
+  width: 100%;
+}
+
+.header-value {
+  max-height: 80px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+  background-color: #132F45;
+  width: 100%;
+  box-sizing: border-box;
+  color: #eee;
+}
+
+.header-value::-webkit-scrollbar {
+  width: 6px;
+}
+
+.header-value::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.header-value::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.header-value::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.header-url-regex {
+  font-size: 1.2rem;
+  color: #ddd;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.url-label {
+  font-weight: bold;
+  color: #ddd;
+}
+
+.header-override-type {
+  font-size: 1.2rem;
+  color: #ddd;
+}
+
+.override-label {
+  font-weight: bold;
+  color: #ddd;
 }
 
 .request-header-text {
@@ -314,7 +396,6 @@ code {
   box-shadow: inset 0 0 0 2px;
 }
 
-/* CHECKBOX STYLES */
 .c-cb {
   box-sizing: border-box;
   font-family: Arial, sans-serif;
@@ -322,69 +403,36 @@ code {
   font-weight: 400;
   font-size: 1.6rem;
   line-height: 1.25;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   position: relative;
   min-height: 44px;
-  padding-left: 40px;
   clear: left;
-}
-
-.c-cb>label::before,
-.c-cb>input[type="checkbox"] {
-  box-sizing: border-box;
-  top: -2px;
-  left: -2px;
-  width: 44px;
-  height: 44px;
+  width: 100%;
 }
 
 .c-cb>input[type="checkbox"] {
   -webkit-font-smoothing: antialiased;
   cursor: pointer;
-  position: absolute;
+  position: relative;
   z-index: 1;
   margin: 0;
-  opacity: 0;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: #729ebf;
+
 }
 
-.c-cb>label {
-  font-size: inherit;
-  font-family: inherit;
-  line-height: inherit;
-  display: inline-block;
-  margin-bottom: 0;
-  padding: 8px 15px 5px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.c-cb>label::before {
-  content: "";
+.scroll-indicator {
   position: absolute;
-  border: 2px solid currentColor;
-  background: transparent;
-}
-
-.c-cb>input[type="checkbox"]:focus+label::before {
-  border-width: 2px;
-}
-
-.c-cb>label::after {
-  box-sizing: content-box;
-  content: "";
-  position: absolute;
-  top: 11px;
-  left: 9px;
-  width: 18px;
-  height: 7px;
-  transform: rotate(-45deg);
-  border: solid;
-  border-width: 0 0 5px 5px;
-  border-top-color: transparent;
-  opacity: 0;
-  background: transparent;
-}
-
-.c-cb>input[type="checkbox"]:checked+label::after {
-  opacity: 1;
+  bottom: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 3px 0 4px 0;
+  pointer-events: none;
 }

@@ -1,12 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-
-function usePrevious(value) {
-  const ref = useRef();
-  useEffect(() => {
-    ref.current = value;
-  });
-  return ref.current;
-}
+import usePrevious from "../../../../utils/usePrevious.js";
 
 export default function RequestHeader(props) {
   const [isEditing, setEditing] = useState(false);
@@ -42,10 +35,6 @@ export default function RequestHeader(props) {
       return;
     }
     props.editHeader(props.id, newName, newValue, newUrlRegex, overrideType);
-    setNewName('');
-    setNewValue('');
-    setUrlRegex('');
-    setOverrideType('header');
     setEditing(false);
   }
 
@@ -122,18 +111,34 @@ export default function RequestHeader(props) {
   const viewTemplate = (
     <div className="stack-small">
       <div className="c-cb">
-        <input
-          id={props.id}
-          type="checkbox"
-          checked={props.enabled}
-          onChange={() => props.toggleHeaderEnabled(props.id)}
-        />
-        <label className="request-header-label" htmlFor={props.id}>
-          {props.name} : {props.value} - <b>{props['url-regex']}</b>
-          <b className="overrideType">
-            {overrideTypeDisplayName(props.overrideType || 'header')}
-          </b>
-        </label>
+        <div className="header-name-container">
+          <input
+            id={props.id}
+            type="checkbox"
+            checked={props.enabled}
+            onChange={() => props.toggleHeaderEnabled(props.id)}
+          />
+          <div
+            className="header-name"
+            onClick={() => props.toggleHeaderEnabled(props.id)}
+            style={{ cursor: 'pointer' }}
+          >
+            {props.name}
+          </div>
+        </div>
+        <div className="header-info">
+          <div className="header-value-container">
+            <div className="header-value" title={props.value.length > 100 ? "Scroll to see full value" : ""}>
+              {props.value}
+            </div>
+          </div>
+          <div className="header-url-regex">
+            <span className="url-label">URL Pattern:</span> {props['url-regex'] || '*'}
+          </div>
+          <div className="header-override-type">
+            <span className="override-label">Type:</span> {overrideTypeDisplayName(props.overrideType || 'header')}
+          </div>
+        </div>
       </div>
       <div className="btn-group">
         <button

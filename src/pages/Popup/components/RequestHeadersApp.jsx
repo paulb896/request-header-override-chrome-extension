@@ -2,213 +2,153 @@ import React, { useState, useRef, useEffect } from "react";
 import AddRequestHeaderForm from "./AddRequestHeaderForm";
 import RequestHeader from "./RequestHeader";
 
-function usePrevious(value) {
-  const ref = useRef();
-  useEffect(() => {
-    ref.current = value;
-  });
-  return ref.current;
-}
+import {
+  CONSTANTS,
+  generateRandomId,
+  getPluralizedText,
+  saveHeadersToStorage,
+  loadHeadersFromStorage,
+  cleanupOrphanedRules,
+  usePrevious
+} from "../../../../utils/index";
 
-let loadedFromStorage = false;
-
-function getAction(header) {
-  if (header.overrideType === 'requestQueryParam') {
-    return {
-      type: 'redirect',
-      redirect: {
-        transform: {
-          queryTransform: {
-            addOrReplaceParams: [{
-              key: header.name,
-              value: header.value
-            }]
-          }
-        }
-      }
-    };
-  }
-
-  return {
-    type: 'modifyHeaders',
-    requestHeaders: [
-      { header: header.name, operation: 'set', value: header.value }
-    ]
-  };
-}
-
-const updateOverrideHeaders = (headerOverrides, removeRuleIds = []) => {
-  if (removeRuleIds.length) {
-    chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds
-    }, () => console.log(`rules have been removed for ${JSON.stringify(removeRuleIds)}`));
-  } else {
-    headerOverrides.map(header => {
-      if (header.enabled || removeRuleIds.length) {
-        chrome.declarativeNetRequest.updateDynamicRules({
-          addRules: removeRuleIds.length ? undefined : [
-            {
-              id: header.id,
-              priority: 1,
-              action: getAction(header),
-              condition: { urlFilter: header.urlFilter, resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest', 'other'] }
-            }
-          ],
-          removeRuleIds
-        }, () => console.log(`rules have been saved for ${JSON.stringify(header)}`));
-      }
-
-      chrome.declarativeNetRequest.getDynamicRules(rawRules => {
-        console.log('rawRules', rawRules)
-      });
-    });
-  }
-}
-
-const saveRequestHeaders = (requestHeaders, removeRuleIds) =>
-  chrome.storage.local.set({
-    requestHeaders: JSON.stringify(requestHeaders)
-  }, updateOverrideHeaders(requestHeaders, removeRuleIds))
-
-function RequestHeadersApp(props) {
+function RequestHeadersApp() {
   const [headers, setHeaders] = useState([]);
+  const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
 
-  function toggleHeaderEnabled(id) {
-    let headerEnabled = true;
+  const listHeadingRef = useRef(null);
+  const prevHeaderLength = usePrevious(headers.length);
 
+  const updateHeaders = (newHeaders, removeRuleIds = []) => {
+    setHeaders(newHeaders);
+    saveHeadersToStorage(newHeaders, removeRuleIds);
+  };
+
+  const toggleHeaderEnabled = (id) => {
     const updatedHeaders = headers.map(header => {
-      if (id === header.id) {
-
-        headerEnabled = !header.enabled;
-        return { ...header, enabled: headerEnabled }
+      if (header.id === id) {
+        const newEnabledState = !header.enabled;
+        return { ...header, enabled: newEnabledState };
       }
       return header;
     });
 
-    setHeaders(updatedHeaders);
-    saveRequestHeaders(updatedHeaders, headerEnabled ? [] : [id]);
-  }
+    const toggledHeader = updatedHeaders.find(header => header.id === id);
+    const removeRuleIds = toggledHeader.enabled ? [] : [id];
 
+    updateHeaders(updatedHeaders, removeRuleIds);
+  };
 
-  function deleteHeader(id) {
-    const remainingHeaders = headers.filter(header => id !== header.id);
+  const deleteHeader = (id) => {
+    const remainingHeaders = headers.filter(header => header.id !== id);
+    updateHeaders(remainingHeaders, [id]);
+  };
 
-    setHeaders(remainingHeaders);
-    saveRequestHeaders(remainingHeaders, [id]);
-  }
+  const updateAllHeadersEnabled = (enabled) => {
+    const updatedHeaders = headers.map(header => ({ ...header, enabled }));
+    const removeRuleIds = enabled ? [] : headers.map(header => header.id);
 
-  function disableAllHandler() {
-    const updatedHeaders = headers.map(header => ({ ...header, enabled: false }));
+    updateHeaders(updatedHeaders, removeRuleIds);
+  };
 
-    setHeaders(updatedHeaders);
-    saveRequestHeaders(updatedHeaders, headers.map(header => header.id));
-  }
+  const editHeader = (id, name, value, urlRegex, overrideType) => {
+    const updatedHeaders = headers.map(header =>
+      header.id === id
+        ? { ...header, name, value, urlRegex, overrideType }
+        : header
+    );
 
-  function enableAllHandler() {
-    const updatedHeaders = headers.map(header => ({ ...header, enabled: true }));
+    updateHeaders(updatedHeaders, [id]);
+  };
 
-    setHeaders(updatedHeaders);
-    saveRequestHeaders(updatedHeaders);
-  }
+  const addHeader = (name, value, overrideType) => {
+    const newHeader = {
+      id: generateRandomId(),
+      name,
+      value,
+      enabled: false,
+      urlRegex: '',
+      overrideType: overrideType || CONSTANTS.DEFAULT_OVERRIDE_TYPE
+    };
 
-  function editHeader(id, name, value, urlRegex, overrideType) {
-    const editedHeaderList = headers.map(header => {
-      // if this header has the same ID as the edited header
-      if (id === header.id) {
-        return { ...header, name, value, urlRegex, overrideType }
-      }
-      return header;
-    });
+    const newHeaders = [newHeader, ...headers];
+    updateHeaders(newHeaders);
+  };
 
-    setHeaders(editedHeaderList);
-    saveRequestHeaders(editedHeaderList);
-  }
+  const enabledHeadersCount = headers.filter(header => header.enabled).length;
+  const headersNoun = getPluralizedText(enabledHeadersCount, 'request header', 'request headers');
+  const headingText = `${enabledHeadersCount} ${headersNoun} set`;
 
-  const headerList = headers ? headers
-    .map(header => (<>
+  const renderHeaderItem = (header) => (
+    <React.Fragment key={header.id}>
       <RequestHeader
         id={header.id}
         name={header.name}
         value={header.value}
         enabled={header.enabled}
         url-regex={header.urlRegex}
-        overrideType={header.overrideType || 'header'}
-        key={header.id}
+        overrideType={header.overrideType || CONSTANTS.DEFAULT_OVERRIDE_TYPE}
         toggleHeaderEnabled={toggleHeaderEnabled}
         deleteHeader={deleteHeader}
         editHeader={editHeader}
       />
       <hr />
-    </>
-    )) : '';
+    </React.Fragment>
+  );
 
-  const generateRandomInteger = (max) => {
-    return Math.floor(Math.random() * max) + 1;
-  }
-
-  function addHeader(name, value, overrideType) {
-    const MAX_HEADER_ID = 9999999;
-    const newHeader = { id: generateRandomInteger(MAX_HEADER_ID), name, value, enabled: false, urlRegex: '', overrideType };
-    const newHeaders = [newHeader, ...headers];
-
-    setHeaders(newHeaders);
-    saveRequestHeaders(newHeaders);
-  }
-
-  const headersNoun = headers.filter(header => header.enabled).length !== 1 ? 'request headers' : 'request header';
-  const headingText = `${headers.filter(header => header.enabled).length} ${headersNoun} set  `;
-
-  const listHeadingRef = useRef(null);
-  const prevHeaderLength = usePrevious(headers.length);
+  const renderHeaderList = () =>
+    headers.length > 0 ? headers.map(renderHeaderItem) : '';
 
   useEffect(() => {
     if (headers.length - prevHeaderLength === -1) {
-      listHeadingRef.current.focus();
+      listHeadingRef.current?.focus();
     }
   }, [headers.length, prevHeaderLength]);
 
   useEffect(() => {
-    if (chrome.storage) {
-      if (!loadedFromStorage) {
-        chrome.storage.local.get(["requestHeaders"]).then(response => {
-          const requestOverrides = JSON.parse(response.requestHeaders);
-          setHeaders(requestOverrides);
+    if (!chrome.storage || isLoadedFromStorage) return;
 
-          // Remove rules that don't match overrides in local storage
-          chrome.declarativeNetRequest.getDynamicRules((rules) => {
-            rules.forEach(rule => {
-              if (!requestOverrides.find((requestOverride) => requestOverride.id === rule.id)) {
-                chrome.declarativeNetRequest.updateDynamicRules({
-                  removeRuleIds: [rule.id]
-                })
-              }
-            })
-          });
-        })
-        loadedFromStorage = true;
-      }
-    }
-  });
+    const initializeHeaders = async () => {
+      const requestOverrides = await loadHeadersFromStorage();
+      setHeaders(requestOverrides);
+      cleanupOrphanedRules(requestOverrides);
+      setIsLoadedFromStorage(true);
+    };
+
+    initializeHeaders();
+  }, [isLoadedFromStorage]);
 
   return (
     <div className="request-header-app stack-small">
       <AddRequestHeaderForm addHeader={addHeader} />
+
       <h3 id="list-heading" tabIndex="-1" ref={listHeadingRef}>
         {headingText}
       </h3>
-      <button className="btn btn__primary btn__sm" onClick={disableAllHandler}>
-        Disable All
-      </button>&nbsp;
-      <button className="btn btn__primary btn__sm" onClick={enableAllHandler}>
-        Enable All
-      </button>
+
+      <div className="btn-group">
+        <button
+          className="btn btn__primary btn__sm"
+          onClick={() => updateAllHeadersEnabled(false)}
+        >
+          Disable All
+        </button>
+        <button
+          className="btn btn__primary btn__sm"
+          onClick={() => updateAllHeadersEnabled(true)}
+        >
+          Enable All
+        </button>
+      </div>
+
       <hr />
+
       <ul
         role="list"
         className="request-header-list stack-small stack-exception"
         aria-labelledby="list-heading"
       >
-        {headerList}
+        {renderHeaderList()}
       </ul>
     </div>
   );
