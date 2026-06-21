@@ -7,21 +7,23 @@ const createHeaderAction = (header) => {
       redirect: {
         transform: {
           queryTransform: {
-            addOrReplaceParams: [{
-              key: header.name,
-              value: header.value
-            }]
-          }
-        }
-      }
+            addOrReplaceParams: [
+              {
+                key: header.name,
+                value: header.value,
+              },
+            ],
+          },
+        },
+      },
     };
   }
 
   return {
     type: 'modifyHeaders',
     requestHeaders: [
-      { header: header.name, operation: 'set', value: header.value }
-    ]
+      { header: header.name, operation: 'set', value: header.value },
+    ],
   };
 };
 

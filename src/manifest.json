@@ -1,26 +1,58 @@
 {
   "manifest_version": 3,
-  "name": "Request Header/Query Param Override MV3",
-  "version": "1.0.1",
-  "description": "A chrome extension for overriding external http request headers and query parameters",
+  "name": "RequestFlow Pro — HTTP Request Header & Query Param Overrider",
+  "version": "2.0.0",
+  "description": "Effortlessly override, add, or modify HTTP request headers, query parameters, and upstream responses using URL matching.",
   "options_page": "options.html",
   "action": {
-    "icon": "main-icon-38.png",
+    "icon": "main-icon-48.png",
     "default_popup": "popup.html",
     "default_icon": {
-      "38": "main-icon-38.png"
+      "16": "main-icon-16.png",
+      "32": "main-icon-32.png",
+      "38": "main-icon-38.png",
+      "48": "main-icon-48.png"
     },
-    "default_title": "Modify Outgoing XHR/Fetch Request Headers and Query Params"
+    "default_title": "Modify Outgoing XHR/Fetch Request Headers, Query Params, and Upstream Responses with RequestFlow Pro"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
   },
   "icons": {
-    "128": "main-icon-128.jpg"
+    "16": "main-icon-16.png",
+    "32": "main-icon-32.png",
+    "48": "main-icon-48.png",
+    "128": "main-icon-128.png"
   },
-  "permissions": [
-    "storage",
-    "declarativeNetRequest"
+  "permissions": ["storage", "declarativeNetRequest", "webRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.bundle.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.bundle.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["injectScript.bundle.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN",
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    }
   ],
-  "host_permissions": [
-    "<all_urls>"
+  "web_accessible_resources": [
+    {
+      "resources": ["injectScript.bundle.js"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "devtools_page": "devtools.html"
 }

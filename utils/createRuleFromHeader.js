@@ -8,8 +8,8 @@ const createRuleFromHeader = (header) => ({
   action: createHeaderAction(header),
   condition: {
     urlFilter: getUrlFilter(header.urlRegex),
-    resourceTypes: CONSTANTS.RESOURCE_TYPES
-  }
+    resourceTypes: CONSTANTS.RESOURCE_TYPES,
+  },
 });
 
 export default createRuleFromHeader;

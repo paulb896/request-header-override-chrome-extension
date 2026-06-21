@@ -1,11 +1,12 @@
 import React from 'react';
 import { render } from 'react-dom';
 
-import Options from './Options';
+import Popup from '../Popup/Popup';
+import '../Popup/index.css';
 import './index.css';
 
 render(
-  <Options title={'Settings'} />,
+  <Popup isOptionsPage={true} />,
   window.document.querySelector('#app-container')
 );
 

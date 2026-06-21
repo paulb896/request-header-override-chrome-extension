@@ -5,9 +5,12 @@ const addRulesToChrome = (enabledHeaders) => {
 
   const rulesToAdd = enabledHeaders.map(createRuleFromHeader);
 
-  chrome.declarativeNetRequest.updateDynamicRules({
-    addRules: rulesToAdd
-  }, () => console.log(`Rules saved for ${JSON.stringify(enabledHeaders)}`));
+  chrome.declarativeNetRequest.updateDynamicRules(
+    {
+      addRules: rulesToAdd,
+    },
+    () => {}
+  );
 };
 
 export default addRulesToChrome;

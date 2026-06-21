@@ -12,7 +12,7 @@ export { default as createHeaderAction } from './createHeaderAction.js';
 export { default as createRuleFromHeader } from './createRuleFromHeader.js';
 export { default as addRulesToChrome } from './addRulesToChrome.js';
 export { default as removeRulesFromChrome } from './removeRulesFromChrome.js';
-export { default as logCurrentRules } from './logCurrentRules.js';
+
 export { default as updateChromeRules } from './updateChromeRules.js';
 
 // Storage utilities

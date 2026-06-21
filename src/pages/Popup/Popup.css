@@ -1,14 +1,22 @@
+body {
+  width: 790px;
+  height: 600px;
+  margin: 0;
+  overflow: hidden;
+}
+
 .App {
+  width: 790px;
+  height: 600px;
   position: absolute;
   top: 0px;
   bottom: 0px;
   left: 0px;
   right: 0px;
-  text-align: center;
-  height: 100%;
-  padding: 10px;
-  background-color: #282c34;
-  overflow-y: scroll;
+  text-align: left;
+  padding: 0;
+  background-color: var(--bg-primary);
+  overflow: hidden;
 }
 
 .App-logo {

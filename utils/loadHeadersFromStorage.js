@@ -7,7 +7,6 @@ const loadHeadersFromStorage = async () => {
 
     return JSON.parse(response[CONSTANTS.STORAGE_KEY]);
   } catch (error) {
-    console.error('Error parsing headers from storage:', error);
     return [];
   }
 };
