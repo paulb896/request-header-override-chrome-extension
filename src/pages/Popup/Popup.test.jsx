@@ -19,10 +19,17 @@ jest.mock('./components/TopNav', () => ({ activeTab, onTabChange, toggleTheme })
   </div>
 ));
 jest.mock('./components/DashboardView', () => () => <div data-testid="dashboard-view" />);
-jest.mock('./components/RequestLogsView', () => ({ onSelectRequest }) => (
-  <div data-testid="request-logs-view">
-    <button onClick={() => onSelectRequest({ id: 1 })}>Select Request</button>
-  </div>
+jest.mock('./components/RequestLogsView', () => (props) => (
+  <button 
+    data-testid="request-logs-view" 
+    data-enabled={String(props.requestCollectingEnabled)}
+    onClick={() => {
+      props.onSelectRequest({ id: 1 });
+      if (props.setRequestCollectingEnabled) {
+        props.setRequestCollectingEnabled(true);
+      }
+    }}
+  />
 ));
 jest.mock('./components/InspectorPanel', () => ({ onClose }) => (
   <div data-testid="inspector-panel">
@@ -149,7 +156,7 @@ describe('Popup Component', () => {
     
     expect(screen.queryByTestId('inspector-panel')).not.toBeInTheDocument();
     
-    fireEvent.click(screen.getByText('Select Request'));
+    fireEvent.click(screen.getByTestId('request-logs-view'));
     expect(screen.getByTestId('inspector-panel')).toBeInTheDocument();
     
     fireEvent.click(screen.getByText('Close Inspector'));
@@ -170,5 +177,80 @@ describe('Popup Component', () => {
     const { container } = render(<Popup isOptionsPage={true} />);
     const dashboardLayout = container.querySelector('.dashboard-layout');
     expect(dashboardLayout).toHaveStyle({ width: '100vw', height: '100vh', maxWidth: 'none' });
+  });
+
+  test('loads settings from storage on mount', async () => {
+    mockStorage.requestCollectingEnabled = true;
+    mockStorage.responseOverridesEnabled = true;
+    
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
+      cb({
+        theme: mockStorage.theme,
+        requestCollectingEnabled: mockStorage.requestCollectingEnabled,
+        responseOverridesEnabled: mockStorage.responseOverridesEnabled,
+      });
+    });
+
+    render(<Popup />);
+    fireEvent.click(screen.getByText('Tab: Settings'));
+
+    const rcToggle = screen.getByLabelText('Toggle Request Collecting');
+    const roToggle = screen.getByLabelText('Toggle Response Overrides');
+
+    expect(rcToggle).toBeChecked();
+    expect(roToggle).toBeChecked();
+  });
+
+  test('toggles settings correctly', async () => {
+    render(<Popup />);
+    fireEvent.click(screen.getByText('Tab: Settings'));
+
+    const rcToggle = screen.getByLabelText('Toggle Request Collecting');
+    const roToggle = screen.getByLabelText('Toggle Response Overrides');
+
+    expect(rcToggle).not.toBeChecked();
+    expect(roToggle).not.toBeChecked();
+
+    fireEvent.click(rcToggle);
+    expect(rcToggle).toBeChecked();
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ requestCollectingEnabled: true });
+
+    fireEvent.click(roToggle);
+    expect(roToggle).toBeChecked();
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ responseOverridesEnabled: true });
+  });
+
+  test('handles settings toggle when storage is unavailable', () => {
+    delete global.chrome.storage;
+    render(<Popup />);
+    fireEvent.click(screen.getByText('Tab: Settings'));
+
+    const rcToggle = screen.getByLabelText('Toggle Request Collecting');
+    const roToggle = screen.getByLabelText('Toggle Response Overrides');
+
+    fireEvent.click(rcToggle);
+    expect(rcToggle).toBeChecked();
+
+    fireEvent.click(roToggle);
+    expect(roToggle).toBeChecked();
+  });
+
+  test('passes requestCollectingEnabled props to RequestLogsView and propagates changes', async () => {
+    mockStorage.requestCollectingEnabled = false;
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
+      cb({
+        theme: mockStorage.theme,
+        requestCollectingEnabled: mockStorage.requestCollectingEnabled,
+      });
+    });
+
+    render(<Popup />);
+    fireEvent.click(screen.getByText('Tab: Logs'));
+
+    const logsBtn = screen.getByTestId('request-logs-view');
+    expect(logsBtn).toHaveAttribute('data-enabled', 'false');
+
+    fireEvent.click(logsBtn); // triggers setRequestCollectingEnabled(true)
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ requestCollectingEnabled: true });
   });
 });

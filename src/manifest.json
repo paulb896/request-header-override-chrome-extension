@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RequestFlow Pro — HTTP Request Header & Query Param Overrider",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Effortlessly override, add, or modify HTTP request headers, query parameters, and upstream responses using URL matching.",
   "options_page": "options.html",
   "action": {
@@ -15,32 +15,43 @@
     },
     "default_title": "Modify Outgoing XHR/Fetch Request Headers, Query Params, and Upstream Responses with RequestFlow Pro"
   },
-  "chrome_url_overrides": {
-    "newtab": "newtab.html"
-  },
   "icons": {
     "16": "main-icon-16.png",
     "32": "main-icon-32.png",
     "48": "main-icon-48.png",
     "128": "main-icon-128.png"
   },
-  "permissions": ["storage", "declarativeNetRequest", "webRequest"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.bundle.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["contentScript.bundle.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "contentScript.bundle.js"
+      ],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true,
       "match_origin_as_fallback": true
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["injectScript.bundle.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "injectScript.bundle.js"
+      ],
       "run_at": "document_start",
       "all_frames": true,
       "world": "MAIN",
@@ -50,8 +61,12 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injectScript.bundle.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "injectScript.bundle.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "devtools_page": "devtools.html"

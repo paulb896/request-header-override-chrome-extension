@@ -310,7 +310,7 @@ describe('RequestLogsView Component', () => {
   });
 
   test('handles empty result from storage on mount', () => {
-    global.chrome.storage.local.get.mockImplementationOnce((keys, cb) => cb({}));
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => cb({}));
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
     expect(screen.getByText(/No network requests intercepted yet/i)).toBeInTheDocument();
   });
@@ -324,6 +324,83 @@ describe('RequestLogsView Component', () => {
     
     fireEvent(window, new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(handleSelect).not.toHaveBeenCalled();
+  });
+
+  test('renders warning banner when request collecting is disabled, and allows enabling inline', () => {
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
+      if (keys.includes('requestCollectingEnabled')) {
+        cb({ requestCollectingEnabled: false });
+      } else {
+        cb({});
+      }
+    });
+
+    render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+    expect(screen.getByText('Request collecting is disabled. Enable it to start capturing requests.')).toBeInTheDocument();
+
+    const toggle = screen.getByLabelText('Toggle Request Collecting Inline');
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ requestCollectingEnabled: true });
+  });
+
+  test('covers chrome.storage.onChanged is undefined on mount', () => {
+    const originalOnChanged = global.chrome.storage.onChanged;
+    global.chrome.storage.onChanged = undefined;
+
+    const { unmount } = render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+    unmount();
+
+    global.chrome.storage.onChanged = originalOnChanged;
+  });
+
+  test('calls propSetEnabled if provided', () => {
+    const propSetEnabledMock = jest.fn();
+    render(
+      <RequestLogsView
+        onSelectRequest={jest.fn()}
+        selectedRequest={null}
+        requestCollectingEnabled={false}
+        setRequestCollectingEnabled={propSetEnabledMock}
+      />
+    );
+    const toggle = screen.getByLabelText('Toggle Request Collecting Inline');
+    fireEvent.click(toggle);
+    expect(propSetEnabledMock).toHaveBeenCalledWith(true);
+  });
+
+  test('updates inline state when storage changes requestCollectingEnabled', () => {
+    render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+    
+    act(() => {
+      listeners.forEach(l => l({
+        requestCollectingEnabled: {
+          newValue: true
+        }
+      }, 'local'));
+    });
+
+    expect(screen.queryByText('Request collecting is disabled. Enable it to start capturing requests.')).not.toBeInTheDocument();
+
+    act(() => {
+      listeners.forEach(l => l({
+        requestCollectingEnabled: {
+          newValue: undefined
+        }
+      }, 'local'));
+    });
+    expect(screen.getByText('Request collecting is disabled. Enable it to start capturing requests.')).toBeInTheDocument();
+  });
+
+  test('toggles inline and handles falsy storage', () => {
+    const originalStorage = global.chrome.storage;
+    global.chrome.storage = undefined;
+    render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+    const toggle = screen.getByLabelText('Toggle Request Collecting Inline');
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('Toggle Request Collecting Inline')).not.toBeInTheDocument();
+    global.chrome.storage = originalStorage;
   });
 });
 

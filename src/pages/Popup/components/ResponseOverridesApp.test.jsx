@@ -268,10 +268,49 @@ describe('ResponseOverridesApp', () => {
 
     const copyBtns = screen.getAllByTitle('Copy Payload');
     fireEvent.click(copyBtns[0]);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('{"data": "mocked"}');
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(JSON.stringify({"data": "mocked"}, null, 2));
 
     fireEvent.click(copyBtns[1]);
     expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith('');
+  });
+
+  it('handles invalid json and plain text mock responses in formatJsonString', async () => {
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
+      if (keys.includes('responseOverridesEnabled')) {
+        cb({ responseOverridesEnabled: true });
+      } else if (keys.includes('responseOverrides')) {
+        cb({
+          responseOverrides: [
+            {
+              id: 'mock-invalid',
+              matchUrl: 'https://api.example.com/invalid',
+              mockResponse: '{"invalid json',
+              active: true,
+            },
+            {
+              id: 'mock-plain',
+              matchUrl: 'https://api.example.com/plain',
+              mockResponse: 'plain text',
+              active: true,
+            },
+          ],
+        });
+      } else {
+        cb({});
+      }
+    });
+
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+
+    await waitFor(() => {
+      expect(screen.getByText('{"invalid json')).toBeInTheDocument();
+      expect(screen.getByText('plain text')).toBeInTheDocument();
+    });
+
+    // Start editing one of them to cover startEditing formatting fallback
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    expect(screen.getByDisplayValue('{"invalid json')).toBeInTheDocument();
   });
 
   it('returns early if no chrome.storage', () => {
@@ -659,7 +698,7 @@ describe('ResponseOverridesApp', () => {
   });
 
   it('handles empty result from storage on mount', async () => {
-    global.chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
       cb({});
     });
 
@@ -669,6 +708,105 @@ describe('ResponseOverridesApp', () => {
     await waitFor(() => {
       expect(screen.queryByText('https://api.example.com/data')).not.toBeInTheDocument();
     });
+  });
+
+  it('renders a warning banner when response overrides are disabled, and allows enabling inline', async () => {
+    global.chrome.storage.local.get.mockImplementation((keys, cb) => {
+      if (keys.includes('responseOverridesEnabled')) {
+        cb({ responseOverridesEnabled: false });
+      } else {
+        cb({});
+      }
+    });
+
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Response overrides are disabled. Enable them to activate mocks.')).toBeInTheDocument();
+    });
+
+    const toggle = screen.getByLabelText('Toggle Response Overrides Inline');
+    expect(toggle).not.toBeChecked();
+
+    fireEvent.click(toggle);
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ responseOverridesEnabled: true });
+  });
+
+  it('calls propSetEnabled if provided', () => {
+    const propSetEnabledMock = jest.fn();
+    render(
+      <ResponseOverridesApp
+        responseOverridesEnabled={false}
+        setResponseOverridesEnabled={propSetEnabledMock}
+      />
+    );
+    fireEvent.click(screen.getByText('Response Interceptor'));
+    const toggle = screen.getByLabelText('Toggle Response Overrides Inline');
+    fireEvent.click(toggle);
+    expect(propSetEnabledMock).toHaveBeenCalledWith(true);
+  });
+
+  it('updates inline state when storage changes responseOverridesEnabled', async () => {
+    const testListeners = [];
+    global.chrome.storage.onChanged.addListener.mockImplementation((listener) => {
+      testListeners.push(listener);
+    });
+
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Response overrides are disabled. Enable them to activate mocks.')).toBeInTheDocument();
+    });
+
+    act(() => {
+      testListeners.forEach(l => l({
+        responseOverridesEnabled: {
+          newValue: true
+        }
+      }, 'local'));
+    });
+
+    expect(screen.queryByText('Response overrides are disabled. Enable them to activate mocks.')).not.toBeInTheDocument();
+
+    act(() => {
+      // Trigger with non-local namespace
+      testListeners.forEach(l => l({
+        responseOverridesEnabled: {
+          newValue: true
+        }
+      }, 'sync'));
+      // Trigger with missing responseOverridesEnabled key
+      testListeners.forEach(l => l({
+        someOtherKey: {
+          newValue: true
+        }
+      }, 'local'));
+    });
+
+    expect(screen.queryByText('Response overrides are disabled. Enable them to activate mocks.')).not.toBeInTheDocument();
+
+    act(() => {
+      testListeners.forEach(l => l({
+        responseOverridesEnabled: {
+          newValue: undefined
+        }
+      }, 'local'));
+    });
+
+    expect(screen.getByText('Response overrides are disabled. Enable them to activate mocks.')).toBeInTheDocument();
+  });
+
+  it('toggles inline and handles falsy storage', () => {
+    const originalStorage = global.chrome.storage;
+    global.chrome.storage = undefined;
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+    const toggle = screen.getByLabelText('Toggle Response Overrides Inline');
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('Toggle Response Overrides Inline')).not.toBeInTheDocument();
+    global.chrome.storage = originalStorage;
   });
 });
 

@@ -9,6 +9,14 @@
 
 <br />
 
+<div align="left">
+  <a href="https://chromewebstore.google.com/detail/requestflow-pro-%E2%80%94-http-re/cfgjehpalgepkcfekgjgmklehchiidgi?hl=en" target="_blank">
+    <img src="https://raw.githubusercontent.com/paulb896/request-header-override-chrome-extension/main/src/assets/img/chrome-web-store-badge.png" alt="Available in the Chrome Web Store" height="55" />
+  </a>
+</div>
+
+<br />
+
 RequestFlow Pro is a premium, high-fidelity developer utility designed to intercept, modify, and mock HTTP request/response cycles directly within Chrome. Built using a sleek glassmorphic dashboard in React, it leverages Chrome's Manifest V3 `declarativeNetRequest` engine to deliver dynamic network manipulation safely, efficiently, and with zero tracking.
 
 ---

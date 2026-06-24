@@ -5,6 +5,8 @@ describe('Background Script', () => {
     jest.resetModules();
     jest.clearAllMocks();
 
+    global.chrome.storage.local.set({ requestCollectingEnabled: true });
+
     global.chrome.webRequest = {
       onBeforeSendHeaders: { addListener: jest.fn() },
       onCompleted: { addListener: jest.fn() },

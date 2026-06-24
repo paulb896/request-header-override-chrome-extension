@@ -1,17 +1,46 @@
 import React, { useState, useEffect, useRef } from 'react';
 import JsonEditor from './JsonEditor';
 
+const formatJsonString = (str) => {
+  if (!str) return '';
+  try {
+    const trimmed = str.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    }
+  } catch (e) {}
+  return str;
+};
+
 const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
-  const [activeTab, setActiveTab] = useState('headers');
+  const [activeTab, setActiveTab] = useState('payload');
   const [editedResponse, setEditedResponse] = useState('');
   const [isMocked, setIsMocked] = useState(false);
   const [matchedOverrideId, setMatchedOverrideId] = useState(null);
   const [saveStatus, setSaveStatus] = useState('idle');
   const timeoutRef = useRef(null);
 
+  const isJsonResponse = (() => {
+    if (!selectedRequest) return false;
+    if (
+      selectedRequest.contentType &&
+      selectedRequest.contentType.toLowerCase().includes('json')
+    ) {
+      return true;
+    }
+    try {
+      const trimmed = (selectedRequest.response || '').trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        JSON.parse(trimmed);
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  })();
+
   useEffect(() => {
     if (selectedRequest) {
-      setEditedResponse(selectedRequest.response || '');
+      setEditedResponse(formatJsonString(selectedRequest.response || ''));
       setMatchedOverrideId(null);
       setSaveStatus('idle');
       if (timeoutRef.current) {
@@ -35,7 +64,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
           setIsMocked(!!matched);
           if (matched) {
             setMatchedOverrideId(matched.id);
-            setEditedResponse(matched.mockResponse);
+            setEditedResponse(formatJsonString(matched.mockResponse));
           }
         });
       }
@@ -127,7 +156,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
       chrome.storage.local.set({ responseOverrides: newOverrides }, () => {
         setIsMocked(false);
         setMatchedOverrideId(null);
-        setEditedResponse(selectedRequest.response || '');
+        setEditedResponse(formatJsonString(selectedRequest.response || ''));
         setSaveStatus('idle');
       });
     });
@@ -544,8 +573,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
               flexDirection: 'column',
             }}
           >
-            {selectedRequest.contentType &&
-            selectedRequest.contentType.toLowerCase().includes('json') ? (
+            {isJsonResponse ? (
               <JsonEditor
                 value={editedResponse}
                 onChange={setEditedResponse}

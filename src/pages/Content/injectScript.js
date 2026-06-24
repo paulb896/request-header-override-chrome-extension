@@ -15,6 +15,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
   const _nativeCreateElement = document.createElement.bind(document);
 
   let responseOverrides = [];
+  let requestCollectingEnabled = false;
+  let responseOverridesEnabled = false;
 
   // Listen for updates from the content script
   window.addEventListener('message', (event) => {
@@ -22,6 +24,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
 
     if (event.data.type === 'REQUEST_HEADER_OVERRIDE_RESPONSE_MOCKS') {
       responseOverrides = event.data.overrides || [];
+      requestCollectingEnabled = event.data.requestCollectingEnabled === true;
+      responseOverridesEnabled = event.data.responseOverridesEnabled === true;
       updateActiveWorkersMocks(window, responseOverrides);
     }
   });
@@ -39,6 +43,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
 
   // Helper to check if a URL matches our overrides
   function getMatchedOverride(url, method, requestBody) {
+    if (!responseOverridesEnabled) return null;
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
@@ -126,6 +131,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     requestBody,
     operationName
   ) {
+    if (!requestCollectingEnabled) return;
     try {
       let loggedResponse = responseText || '';
       if (loggedResponse.length > 200000) {
@@ -171,8 +177,21 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
   function patchWindow(win) {
     if (!win) return;
 
-    if (!win.__REQUEST_HEADER_OVERRIDE_MAIN_PATCHED__) {
-      win.__REQUEST_HEADER_OVERRIDE_MAIN_PATCHED__ = true;
+    let isAlreadyPatched = false;
+    try {
+      // Accessing document property throws a SecurityError on cross-origin frames
+      if (!win.document) return;
+      isAlreadyPatched = !!win.__REQUEST_HEADER_OVERRIDE_MAIN_PATCHED__;
+    } catch (e) {
+      return;
+    }
+
+    if (!isAlreadyPatched) {
+      try {
+        win.__REQUEST_HEADER_OVERRIDE_MAIN_PATCHED__ = true;
+      } catch (e) {
+        return;
+      }
 
       // ----------------------------------------------------------------------------
       // Monkey-patch win.navigator.serviceWorker.register
@@ -306,7 +325,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const resource = args[0];
                     const rawUrl = typeof resource === 'string'
                       ? resource
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.url
                       : resource
                       ? String(resource)
@@ -314,7 +333,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const url = getAbsoluteUrl(rawUrl);
                     const method = args[1] && args[1].method
                       ? args[1].method
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.method
                       : 'GET';
                                         let requestBody = '';
@@ -322,9 +341,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const body = args[1].body;
                       if (typeof body === 'string') {
                         requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         requestBody = JSON.stringify(obj);
@@ -357,14 +376,14 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     let requestHeaders = [];
                     if (args[1] && args[1].headers) {
                       const headers = args[1].headers;
-                      if (headers instanceof self.Headers) {
+                      if ((self.Headers && headers instanceof self.Headers)) {
                         headers.forEach((value, name) => requestHeaders.push({ name, value }));
                       } else if (Array.isArray(headers)) {
                         requestHeaders = headers.map(([name, value]) => ({ name, value }));
                       } else {
                         Object.keys(headers).forEach((name) => requestHeaders.push({ name, value: String(headers[name]) }));
                       }
-                    } else if (resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                    } else if (resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
                       resource.headers.forEach((value, name) => requestHeaders.push({ name, value }));
                     }
 
@@ -431,9 +450,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     if (body) {
                       if (typeof body === 'string') {
                         this._requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         this._requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         this._requestBody = JSON.stringify(obj);
@@ -599,7 +618,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const resource = args[0];
                     const rawUrl = typeof resource === 'string'
                       ? resource
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.url
                       : resource
                       ? String(resource)
@@ -607,7 +626,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const url = getAbsoluteUrl(rawUrl);
                     const method = args[1] && args[1].method
                       ? args[1].method
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.method
                       : 'GET';
                                         let requestBody = '';
@@ -615,9 +634,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const body = args[1].body;
                       if (typeof body === 'string') {
                         requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         requestBody = JSON.stringify(obj);
@@ -650,14 +669,14 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     let requestHeaders = [];
                     if (args[1] && args[1].headers) {
                       const headers = args[1].headers;
-                      if (headers instanceof self.Headers) {
+                      if ((self.Headers && headers instanceof self.Headers)) {
                         headers.forEach((value, name) => requestHeaders.push({ name, value }));
                       } else if (Array.isArray(headers)) {
                         requestHeaders = headers.map(([name, value]) => ({ name, value }));
                       } else {
                         Object.keys(headers).forEach((name) => requestHeaders.push({ name, value: String(headers[name]) }));
                       }
-                    } else if (resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                    } else if (resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
                       resource.headers.forEach((value, name) => requestHeaders.push({ name, value }));
                     }
 
@@ -725,9 +744,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     if (body) {
                       if (typeof body === 'string') {
                         this._requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         this._requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         this._requestBody = JSON.stringify(obj);
@@ -824,7 +843,16 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
               workerURL = URL.createObjectURL(blob);
             } catch (e) {}
 
-            const workerInstance = new OriginalWorker(workerURL, options);
+            let workerInstance;
+            try {
+              workerInstance = new OriginalWorker(workerURL, options);
+            } catch (err) {
+              if (workerURL !== absoluteURL) {
+                workerInstance = new OriginalWorker(absoluteURL, options);
+              } else {
+                throw err;
+              }
+            }
 
             if (!win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__) {
               win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__ = [];
@@ -983,7 +1011,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const resource = args[0];
                       const rawUrl = typeof resource === 'string'
                         ? resource
-                        : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                        : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                         ? resource.url
                         : resource
                         ? String(resource)
@@ -991,7 +1019,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const url = getAbsoluteUrl(rawUrl);
                       const method = args[1] && args[1].method
                         ? args[1].method
-                        : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                        : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                         ? resource.method
                         : 'GET';
                                             let requestBody = '';
@@ -999,9 +1027,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                         const body = args[1].body;
                         if (typeof body === 'string') {
                           requestBody = body;
-                        } else if (body instanceof self.URLSearchParams) {
+                        } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                           requestBody = body.toString();
-                        } else if (body instanceof self.FormData) {
+                        } else if ((self.FormData && body instanceof self.FormData)) {
                           const obj = {};
                           body.forEach((val, k) => { obj[k] = val; });
                           requestBody = JSON.stringify(obj);
@@ -1034,14 +1062,14 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       let requestHeaders = [];
                       if (args[1] && args[1].headers) {
                         const headers = args[1].headers;
-                        if (headers instanceof self.Headers) {
+                        if ((self.Headers && headers instanceof self.Headers)) {
                           headers.forEach((value, name) => requestHeaders.push({ name, value }));
                         } else if (Array.isArray(headers)) {
                           requestHeaders = headers.map(([name, value]) => ({ name, value }));
                         } else {
                           Object.keys(headers).forEach((name) => requestHeaders.push({ name, value: String(headers[name]) }));
                         }
-                      } else if (resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                      } else if (resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
                         resource.headers.forEach((value, name) => requestHeaders.push({ name, value }));
                       }
 
@@ -1137,9 +1165,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       if (body) {
                         if (typeof body === 'string') {
                           this._requestBody = body;
-                        } else if (body instanceof self.URLSearchParams) {
+                        } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                           this._requestBody = body.toString();
-                        } else if (body instanceof self.FormData) {
+                        } else if ((self.FormData && body instanceof self.FormData)) {
                           const obj = {};
                           body.forEach((val, k) => { obj[k] = val; });
                           this._requestBody = JSON.stringify(obj);
@@ -1318,7 +1346,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const resource = args[0];
                     const rawUrl = typeof resource === 'string'
                       ? resource
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.url
                       : resource
                       ? String(resource)
@@ -1326,7 +1354,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     const url = __req_override_get_abs__(rawUrl);
                     const method = args[1] && args[1].method
                       ? args[1].method
-                      : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                      : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                       ? resource.method
                       : 'GET';
                     const override = __req_override_match__(url);
@@ -1354,14 +1382,14 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     let requestHeaders = [];
                     if (args[1] && args[1].headers) {
                       const headers = args[1].headers;
-                      if (headers instanceof self.Headers) {
+                      if ((self.Headers && headers instanceof self.Headers)) {
                         headers.forEach((value, name) => requestHeaders.push({ name, value }));
                       } else if (Array.isArray(headers)) {
                         requestHeaders = headers.map(([name, value]) => ({ name, value }));
                       } else {
                         Object.keys(headers).forEach((name) => requestHeaders.push({ name, value: String(headers[name]) }));
                       }
-                    } else if (resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                    } else if (resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
                       resource.headers.forEach((value, name) => requestHeaders.push({ name, value }));
                     }
 
@@ -1370,9 +1398,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const body = args[1].body;
                       if (typeof body === 'string') {
                         requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         requestBody = JSON.stringify(obj);
@@ -1442,9 +1470,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     if (body) {
                       if (typeof body === 'string') {
                         this._requestBody = body;
-                      } else if (body instanceof self.URLSearchParams) {
+                      } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                         this._requestBody = body.toString();
-                      } else if (body instanceof self.FormData) {
+                      } else if ((self.FormData && body instanceof self.FormData)) {
                         const obj = {};
                         body.forEach((val, k) => { obj[k] = val; });
                         this._requestBody = JSON.stringify(obj);
@@ -1605,7 +1633,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const resource = args[0];
                       const rawUrl = typeof resource === 'string'
                         ? resource
-                        : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                        : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                         ? resource.url
                         : resource
                         ? String(resource)
@@ -1613,7 +1641,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       const url = getAbsoluteUrl(rawUrl);
                       const method = args[1] && args[1].method
                         ? args[1].method
-                        : resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))
+                        : resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))
                         ? resource.method
                         : 'GET';
                                             let requestBody = '';
@@ -1621,9 +1649,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                         const body = args[1].body;
                         if (typeof body === 'string') {
                           requestBody = body;
-                        } else if (body instanceof self.URLSearchParams) {
+                        } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                           requestBody = body.toString();
-                        } else if (body instanceof self.FormData) {
+                        } else if ((self.FormData && body instanceof self.FormData)) {
                           const obj = {};
                           body.forEach((val, k) => { obj[k] = val; });
                           requestBody = JSON.stringify(obj);
@@ -1656,14 +1684,14 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       let requestHeaders = [];
                       if (args[1] && args[1].headers) {
                         const headers = args[1].headers;
-                        if (headers instanceof self.Headers) {
+                        if ((self.Headers && headers instanceof self.Headers)) {
                           headers.forEach((value, name) => requestHeaders.push({ name, value }));
                         } else if (Array.isArray(headers)) {
                           requestHeaders = headers.map(([name, value]) => ({ name, value }));
                         } else {
                           Object.keys(headers).forEach((name) => requestHeaders.push({ name, value: String(headers[name]) }));
                         }
-                      } else if (resource && (resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                      } else if (resource && ((self.Request && resource instanceof self.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
                         resource.headers.forEach((value, name) => requestHeaders.push({ name, value }));
                       }
 
@@ -1759,9 +1787,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       if (body) {
                         if (typeof body === 'string') {
                           this._requestBody = body;
-                        } else if (body instanceof self.URLSearchParams) {
+                        } else if ((self.URLSearchParams && body instanceof self.URLSearchParams)) {
                           this._requestBody = body.toString();
-                        } else if (body instanceof self.FormData) {
+                        } else if ((self.FormData && body instanceof self.FormData)) {
                           const obj = {};
                           body.forEach((val, k) => { obj[k] = val; });
                           this._requestBody = JSON.stringify(obj);
@@ -1864,7 +1892,16 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
               } catch (e) {}
             }
 
-            const workerInstance = new OriginalSharedWorker(workerURL, options);
+            let workerInstance;
+            try {
+              workerInstance = new OriginalSharedWorker(workerURL, options);
+            } catch (err) {
+              if (workerURL !== absoluteURL) {
+                workerInstance = new OriginalSharedWorker(absoluteURL, options);
+              } else {
+                throw err;
+              }
+            }
 
             if (!win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__) {
               win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__ = [];
@@ -1919,7 +1956,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             typeof resource === 'string'
               ? resource
               : resource &&
-                (resource instanceof win.Request ||
+                ((win.Request && resource instanceof win.Request) ||
                   (resource.constructor &&
                     resource.constructor.name === 'Request'))
               ? resource.url
@@ -1931,7 +1968,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             args[1] && args[1].method
               ? args[1].method
               : resource &&
-                (resource instanceof win.Request ||
+                ((win.Request && resource instanceof win.Request) ||
                   (resource.constructor &&
                     resource.constructor.name === 'Request'))
               ? resource.method
@@ -1942,9 +1979,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             const body = args[1].body;
             if (typeof body === 'string') {
               requestBody = body;
-            } else if (body instanceof win.URLSearchParams) {
+            } else if ((win.URLSearchParams && body instanceof win.URLSearchParams)) {
               requestBody = body.toString();
-            } else if (body instanceof win.FormData) {
+            } else if ((win.FormData && body instanceof win.FormData)) {
               const obj = {};
               body.forEach((val, k) => {
                 obj[k] = val;
@@ -1980,7 +2017,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
           let requestHeaders = [];
           if (args[1] && args[1].headers) {
             const headers = args[1].headers;
-            if (headers instanceof win.Headers) {
+            if ((win.Headers && headers instanceof win.Headers)) {
               headers.forEach((value, name) =>
                 requestHeaders.push({ name, value })
               );
@@ -1996,7 +2033,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             }
           } else if (
             resource &&
-            (resource instanceof win.Request ||
+            ((win.Request && resource instanceof win.Request) ||
               (resource.constructor && resource.constructor.name === 'Request'))
           ) {
             resource.headers.forEach((value, name) =>
@@ -2147,9 +2184,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
               if (body) {
                 if (typeof body === 'string') {
                   this._requestBody = body;
-                } else if (body instanceof win.URLSearchParams) {
+                } else if ((win.URLSearchParams && body instanceof win.URLSearchParams)) {
                   this._requestBody = body.toString();
-                } else if (body instanceof win.FormData) {
+                } else if ((win.FormData && body instanceof win.FormData)) {
                   const obj = {};
                   body.forEach((val, k) => {
                     obj[k] = val;
@@ -2265,12 +2302,16 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
       if (node.nodeType === Node.ELEMENT_NODE) {
         if (node.nodeName === 'IFRAME') {
           try {
-            if (node.contentWindow) patchWindow(node.contentWindow);
+            if (node.contentDocument && node.contentWindow) {
+              patchWindow(node.contentWindow);
+            }
           } catch (e) {}
         } else if (node.querySelectorAll) {
           try {
             node.querySelectorAll('iframe').forEach((iframe) => {
-              if (iframe.contentWindow) patchWindow(iframe.contentWindow);
+              if (iframe.contentDocument && iframe.contentWindow) {
+                patchWindow(iframe.contentWindow);
+              }
             });
           } catch (e) {}
         }
@@ -2329,7 +2370,15 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
         get: function () {
           const win = originalGetContentWindow.call(this);
           if (win) {
-            patchWindow(win);
+            let isSameOrigin = false;
+            try {
+              isSameOrigin = !!this.contentDocument;
+            } catch (e) {
+              isSameOrigin = false;
+            }
+            if (isSameOrigin) {
+              patchWindow(win);
+            }
           }
           return win;
         },
@@ -2349,8 +2398,16 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
       Object.defineProperty(HTMLIFrameElement.prototype, 'contentDocument', {
         get: function () {
           const doc = originalGetContentDocument.call(this);
-          if (doc && doc.defaultView) {
-            patchWindow(doc.defaultView);
+          if (doc) {
+            let isSameOrigin = false;
+            try {
+              isSameOrigin = !!doc.defaultView;
+            } catch (e) {
+              isSameOrigin = false;
+            }
+            if (isSameOrigin && doc.defaultView) {
+              patchWindow(doc.defaultView);
+            }
           }
           return doc;
         },

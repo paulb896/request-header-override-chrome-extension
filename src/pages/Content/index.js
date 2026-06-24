@@ -1,12 +1,31 @@
+let requestCollectingEnabled = false;
+
 // Helper to push overrides to the injected script
 const updateInjectedMocks = (overrides) => {
-  window.postMessage(
-    {
-      type: 'REQUEST_HEADER_OVERRIDE_RESPONSE_MOCKS',
-      overrides: overrides || [],
-    },
-    '*'
-  );
+  try {
+    if (chrome && chrome.runtime && chrome.runtime.id) {
+      chrome.storage.local.get(['requestCollectingEnabled', 'responseOverridesEnabled'], (result) => {
+        try {
+          if (!chrome.runtime || !chrome.runtime.id) return;
+          const collecting = result.requestCollectingEnabled === true;
+          const overridesEnabled = result.responseOverridesEnabled === true;
+          requestCollectingEnabled = collecting;
+
+
+
+          window.postMessage(
+            {
+              type: 'REQUEST_HEADER_OVERRIDE_RESPONSE_MOCKS',
+              overrides: overridesEnabled ? (overrides || []) : [],
+              requestCollectingEnabled: collecting,
+              responseOverridesEnabled: overridesEnabled,
+            },
+            '*'
+          );
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
 };
 
 // Listen for updates from settings
@@ -15,8 +34,12 @@ try {
     chrome.storage.onChanged.addListener((changes, namespace) => {
       try {
         if (!chrome.runtime || !chrome.runtime.id) return;
-        if (namespace === 'local' && changes.responseOverrides) {
-          updateInjectedMocks(changes.responseOverrides.newValue);
+        if (namespace === 'local') {
+          if (changes.responseOverrides || changes.requestCollectingEnabled || changes.responseOverridesEnabled) {
+            chrome.storage.local.get(['responseOverrides'], (result) => {
+              updateInjectedMocks(result.responseOverrides || []);
+            });
+          }
         }
       } catch (e) {
         // Handle invalidated context
@@ -39,6 +62,7 @@ function makeLogKey(request) {
 
 // Forward a log entry from the injected script to the background
 function forwardLogToBackground(logData) {
+  if (!requestCollectingEnabled) return;
   if (!logData || !logData.request) return;
 
   // De-duplicate: skip if we've already forwarded this exact request recently

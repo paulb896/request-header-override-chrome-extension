@@ -1,3 +1,25 @@
+let requestCollectingEnabled = false;
+
+// Initialize setting from storage
+try {
+  chrome.storage.local.get(['requestCollectingEnabled'], (result) => {
+    if (result.requestCollectingEnabled !== undefined) {
+      requestCollectingEnabled = result.requestCollectingEnabled;
+    } else {
+      requestCollectingEnabled = false;
+    }
+  });
+} catch (e) {}
+
+// Watch for changes to the setting
+try {
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.requestCollectingEnabled) {
+      requestCollectingEnabled = changes.requestCollectingEnabled.newValue === true;
+    }
+  });
+} catch (e) {}
+
 const pendingLogs = [];
 let isProcessingQueue = false;
 
@@ -75,7 +97,7 @@ function processQueue() {
         }
       }
 
-      if (list.length > 50) {
+      if (list.length > 1000) {
         list.pop();
       }
 
@@ -97,6 +119,10 @@ function processQueue() {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'LOG_RESPONSE') {
+    if (!requestCollectingEnabled) {
+      if (sendResponse) sendResponse({ success: false, error: 'Request collecting is disabled' });
+      return;
+    }
     const tabId = sender.tab ? sender.tab.id : -1;
     let initiator = '';
     try {
@@ -201,6 +227,9 @@ function logWebRequest(
   responseHeaders,
   isError = false
 ) {
+  if (!requestCollectingEnabled) {
+    return;
+  }
   // We only capture fetch and XHR requests
   if (
     details.type !== 'xmlhttprequest' &&

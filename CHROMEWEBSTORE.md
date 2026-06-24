@@ -64,6 +64,7 @@ English
 | ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `storage`               | permissions      | Required to save and load user-configured request headers, query parameters, and response override rules locally on the device.                                                                              |
 | `declarativeNetRequest` | permissions      | Required to intercept and rewrite outgoing network requests (adding/overriding headers/query parameters) and mocking upstream API responses securely in the background, matching user-defined URL rule sets. |
+| `webRequest`            | permissions      | Required for passive observation and logging of outgoing network requests (URLs, methods, request/response headers, status codes) to populate the developer's Recent Requests log view.                     |
 | `<all_urls>`            | host_permissions | Required to allow the user to apply request header and query parameter overrides on any API domain or website they specify.                                                                                  |
 
 ---

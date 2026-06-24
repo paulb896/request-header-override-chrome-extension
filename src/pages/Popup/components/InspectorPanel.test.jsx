@@ -92,20 +92,20 @@ describe('InspectorPanel Component', () => {
   test('switches tabs correctly', () => {
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
     
-    // Initially headers tab is active
-    expect(screen.getByText('Request Headers')).toBeInTheDocument();
+    // Initially payload tab is active
+    expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
     
     // Switch to Request Body
     fireEvent.click(screen.getByText('Request'));
     expect(screen.getByTestId('json-editor')).toBeInTheDocument();
     
-    // Switch to Response
-    fireEvent.click(screen.getByText('Payload'));
-    expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
-
-    // Switch back to Headers
+    // Switch to Headers
     fireEvent.click(screen.getByText('Headers'));
     expect(screen.getByText('Request Headers')).toBeInTheDocument();
+
+    // Switch back to Payload
+    fireEvent.click(screen.getByText('Payload'));
+    expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
   });
 
   test('displays mock status if URL is matched', async () => {
@@ -237,13 +237,19 @@ describe('InspectorPanel Component', () => {
     const req = { ...mockSelectedRequest, requestHeaders: null, responseHeaders: null };
     render(<InspectorPanel selectedRequest={req} onClose={jest.fn()} />);
     
+    fireEvent.click(screen.getByText('Headers'));
     expect(screen.getByText('Request Headers')).toBeInTheDocument();
     expect(screen.getByText('No request headers recorded')).toBeInTheDocument();
     expect(screen.getByText('No response headers recorded')).toBeInTheDocument();
   });
 
   test('handles plain text payload editing', async () => {
-    const plainTextReq = { ...mockSelectedRequest, contentType: 'text/plain' };
+    const plainTextReq = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/api/plaintext',
+      contentType: 'text/plain',
+      response: 'some plain text'
+    };
     render(<InspectorPanel selectedRequest={plainTextReq} onClose={jest.fn()} />);
     
     fireEvent.click(screen.getByText('Payload'));
@@ -252,6 +258,32 @@ describe('InspectorPanel Component', () => {
     fireEvent.change(textarea, { target: { value: 'plain text' } });
     
     expect(textarea).toHaveValue('plain text');
+  });
+
+  test('handles invalid JSON starting with bracket or brace in formatJsonString', () => {
+    const invalidJsonResReq = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/api/invalid-json-res',
+      response: '{"invalid json'
+    };
+    render(<InspectorPanel selectedRequest={invalidJsonResReq} onClose={jest.fn()} />);
+    
+    fireEvent.click(screen.getByText('Payload'));
+    const textarea = screen.getByDisplayValue('{"invalid json');
+    expect(textarea).toBeInTheDocument();
+  });
+
+  test('auto-detects JSON response when contentType does not specify json', () => {
+    const jsonWithoutHeaderReq = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/api/json-no-header',
+      contentType: 'text/plain',
+      response: '{"detected": true}'
+    };
+    render(<InspectorPanel selectedRequest={jsonWithoutHeaderReq} onClose={jest.fn()} />);
+    
+    fireEvent.click(screen.getByText('Payload'));
+    expect(screen.getByTestId('json-editor')).toBeInTheDocument();
   });
 
   test('handles invalid json request body', () => {

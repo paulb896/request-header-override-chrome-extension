@@ -1,12 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const RequestLogsView = ({ onSelectRequest, selectedRequest }) => {
+const RequestLogsView = ({
+  onSelectRequest,
+  selectedRequest,
+  requestCollectingEnabled: propEnabled,
+  setRequestCollectingEnabled: propSetEnabled,
+}) => {
   const isHoveringLogs = useRef(false);
   const [recentRequests, setRecentRequests] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [methodFilters, setMethodFilters] = useState([]);
   const [statusFilters, setStatusFilters] = useState([]);
   const [typeFilters, setTypeFilters] = useState([]);
+
+  const [localEnabled, setLocalEnabled] = useState(false);
+
+  const isEnabled = propEnabled !== undefined ? propEnabled : localEnabled;
+  const setIsEnabled = (val) => {
+    if (propSetEnabled) {
+      propSetEnabled(val);
+    } else {
+      setLocalEnabled(val);
+      if (chrome.storage) {
+        chrome.storage.local.set({ requestCollectingEnabled: val });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (propEnabled === undefined && chrome.storage) {
+      chrome.storage.local.get(['requestCollectingEnabled'], (result) => {
+        if (result.requestCollectingEnabled !== undefined) {
+          setLocalEnabled(result.requestCollectingEnabled);
+        }
+      });
+      const listener = (changes, namespace) => {
+        if (namespace === 'local' && changes.requestCollectingEnabled) {
+          setLocalEnabled(changes.requestCollectingEnabled.newValue || false);
+        }
+      };
+      if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(listener);
+        return () => chrome.storage.onChanged.removeListener(listener);
+      }
+    }
+  }, [propEnabled]);
 
   useEffect(() => {
     if (chrome.storage) {
@@ -21,8 +59,10 @@ const RequestLogsView = ({ onSelectRequest, selectedRequest }) => {
           setRecentRequests(changes.recentRequests.newValue || []);
         }
       };
-      chrome.storage.onChanged.addListener(listener);
-      return () => chrome.storage.onChanged.removeListener(listener);
+      if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(listener);
+        return () => chrome.storage.onChanged.removeListener(listener);
+      }
     }
   }, []);
 
@@ -186,6 +226,39 @@ const RequestLogsView = ({ onSelectRequest, selectedRequest }) => {
             Clear Logs
           </button>
         </div>
+        {!isEnabled && (
+          <div
+            className="warning-banner"
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+              <span style={{ fontSize: '1.2rem', color: 'var(--text-heading)', fontWeight: '500' }}>
+                Request collecting is disabled. Enable it to start capturing requests.
+              </span>
+            </div>
+            <label className="switch-container" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+              <input
+                type="checkbox"
+                className="switch-input"
+                checked={isEnabled}
+                onChange={(e) => setIsEnabled(e.target.checked)}
+                aria-label="Toggle Request Collecting Inline"
+              />
+              <span className="switch-slider"></span>
+            </label>
+          </div>
+        )}
         <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexDirection: 'column' }}>
           <input
             type="text"

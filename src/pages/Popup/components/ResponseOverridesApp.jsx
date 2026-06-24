@@ -2,7 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { generateRandomId } from '../../../../utils/index';
 import JsonEditor from './JsonEditor';
 
-function ResponseOverridesApp({ hideRecentRequests = false }) {
+const formatJsonString = (str) => {
+  if (!str) return '';
+  try {
+    const trimmed = str.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    }
+  } catch (e) {}
+  return str;
+};
+
+function ResponseOverridesApp({
+  hideRecentRequests = false,
+  responseOverridesEnabled: propEnabled,
+  setResponseOverridesEnabled: propSetEnabled,
+}) {
   const [overrides, setOverrides] = useState([]);
   const [recentRequests, setRecentRequests] = useState([]);
   const [filterTerm, setFilterTerm] = useState('');
@@ -13,6 +28,39 @@ function ResponseOverridesApp({ hideRecentRequests = false }) {
   const [matchUrl, setMatchUrl] = useState('');
   const [matchRequestBody, setMatchRequestBody] = useState('');
   const [mockResponse, setMockResponse] = useState('');
+
+  const [localEnabled, setLocalEnabled] = useState(false);
+
+  const isEnabled = propEnabled !== undefined ? propEnabled : localEnabled;
+  const setIsEnabled = (val) => {
+    if (propSetEnabled) {
+      propSetEnabled(val);
+    } else {
+      setLocalEnabled(val);
+      if (chrome.storage) {
+        chrome.storage.local.set({ responseOverridesEnabled: val });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (propEnabled === undefined && chrome.storage) {
+      chrome.storage.local.get(['responseOverridesEnabled'], (result) => {
+        if (result.responseOverridesEnabled !== undefined) {
+          setLocalEnabled(result.responseOverridesEnabled);
+        }
+      });
+      const listener = (changes, namespace) => {
+        if (namespace === 'local' && changes.responseOverridesEnabled) {
+          setLocalEnabled(changes.responseOverridesEnabled.newValue || false);
+        }
+      };
+      if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(listener);
+        return () => chrome.storage.onChanged.removeListener(listener);
+      }
+    }
+  }, [propEnabled]);
 
   const filteredRequests = recentRequests.filter((req) => {
     const term = filterTerm.toLowerCase();
@@ -126,10 +174,7 @@ function ResponseOverridesApp({ hideRecentRequests = false }) {
 
   const populateFromRequest = (req) => {
     // Attempt to format JSON nicely if possible
-    let formattedResponse = req.response;
-    try {
-      formattedResponse = JSON.stringify(JSON.parse(req.response), null, 2);
-    } catch (e) {}
+    let formattedResponse = formatJsonString(req.response);
 
     // Use just the pathname for better matching, fallback to URL
     let urlToMatch = req.url;
@@ -175,7 +220,7 @@ function ResponseOverridesApp({ hideRecentRequests = false }) {
     setEditingId(o.id);
     setEditingMatchUrl(o.matchUrl);
     setEditingMatchRequestBody(o.matchRequestBody || '');
-    setEditingMockResponse(o.mockResponse);
+    setEditingMockResponse(formatJsonString(o.mockResponse));
   };
 
   const saveEditing = (id) => {
@@ -305,6 +350,40 @@ function ResponseOverridesApp({ hideRecentRequests = false }) {
           >
             Capture live network responses and craft custom payload overrides.
           </p>
+
+          {!isEnabled && (
+            <div
+              className="warning-banner"
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                <span style={{ fontSize: '1.2rem', color: 'var(--text-heading)', fontWeight: '500' }}>
+                  Response overrides are disabled. Enable them to activate mocks.
+                </span>
+              </div>
+              <label className="switch-container" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  className="switch-input"
+                  checked={isEnabled}
+                  onChange={(e) => setIsEnabled(e.target.checked)}
+                  aria-label="Toggle Response Overrides Inline"
+                />
+                <span className="switch-slider"></span>
+              </label>
+            </div>
+          )}
 
           {matchUrl ? (
             /* Edit Override Dialog Card */
@@ -961,14 +1040,14 @@ function ResponseOverridesApp({ hideRecentRequests = false }) {
                         style={{ marginTop: '6px' }}
                       >
                         <pre className="code-content custom-scroll">
-                          {override.mockResponse}
+                          {formatJsonString(override.mockResponse)}
                         </pre>
                         <button
                           type="button"
                           className="copy-btn"
                           onClick={() =>
                             navigator.clipboard.writeText(
-                              override.mockResponse || ''
+                              formatJsonString(override.mockResponse || '')
                             )
                           }
                           title="Copy Payload"

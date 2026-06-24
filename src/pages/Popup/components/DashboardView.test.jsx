@@ -4,13 +4,19 @@ import '@testing-library/jest-dom';
 import DashboardView from './DashboardView';
 
 jest.mock('./RequestHeadersApp', () => () => <div data-testid="request-headers-app" />);
-jest.mock('./ResponseOverridesApp', () => ({ hideRecentRequests }) => (
-  <div data-testid="response-overrides-app" data-hide={hideRecentRequests} />
+jest.mock('./ResponseOverridesApp', () => (props) => (
+  <button 
+    data-testid="response-overrides-app" 
+    data-hide={props.hideRecentRequests ? 'true' : 'false'} 
+    data-enabled={String(props.responseOverridesEnabled)}
+    onClick={() => props.setResponseOverridesEnabled(true)}
+  />
 ));
 
 describe('DashboardView', () => {
   test('renders RequestHeadersApp and ResponseOverridesApp', () => {
-    render(<DashboardView />);
+    const setEnabledMock = jest.fn();
+    render(<DashboardView responseOverridesEnabled={false} setResponseOverridesEnabled={setEnabledMock} />);
     
     expect(screen.getByText('Active Request & Response Overrides')).toBeInTheDocument();
     expect(screen.getByText('Header and Query Parameter Overrides')).toBeInTheDocument();
@@ -21,5 +27,9 @@ describe('DashboardView', () => {
     const overridesApp = screen.getByTestId('response-overrides-app');
     expect(overridesApp).toBeInTheDocument();
     expect(overridesApp).toHaveAttribute('data-hide', 'true');
+    expect(overridesApp).toHaveAttribute('data-enabled', 'false');
+    
+    overridesApp.click();
+    expect(setEnabledMock).toHaveBeenCalledWith(true);
   });
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import RequestHeadersApp from './RequestHeadersApp';
 import ResponseOverridesApp from './ResponseOverridesApp';
 
-const DashboardView = () => {
+const DashboardView = ({ responseOverridesEnabled, setResponseOverridesEnabled }) => {
   return (
     <div
       className="main-content custom-scroll"
@@ -58,7 +58,11 @@ const DashboardView = () => {
             >
               Response Mocks
             </h3>
-            <ResponseOverridesApp hideRecentRequests={true} />
+            <ResponseOverridesApp
+              hideRecentRequests={true}
+              responseOverridesEnabled={responseOverridesEnabled}
+              setResponseOverridesEnabled={setResponseOverridesEnabled}
+            />
           </div>
         </div>
       </div>
