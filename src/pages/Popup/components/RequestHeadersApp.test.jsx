@@ -116,5 +116,91 @@ describe('RequestHeadersApp', () => {
     expect(added).toBeDefined();
     expect(added.overrideType).toBe('header');
   });
+
+  it('updates headers list when storage changes externally', async () => {
+    let storageListener;
+    global.chrome.storage.onChanged.addListener.mockImplementation((l) => {
+      storageListener = l;
+    });
+
+    await act(async () => { render(<RequestHeadersApp />); });
+
+    expect(await screen.findByText('X-Mock-Header')).toBeInTheDocument();
+
+    const updatedHeaders = [
+      { id: 1, name: 'X-Mock-Header-Updated', value: '123', overrideType: 'header', enabled: true },
+    ];
+
+    await act(async () => {
+      storageListener(
+        {
+          requestHeaders: {
+            newValue: JSON.stringify(updatedHeaders),
+          },
+        },
+        'local'
+      );
+    });
+
+    expect(screen.getByText('X-Mock-Header-Updated')).toBeInTheDocument();
+    expect(screen.queryByText('X-Mock-2')).not.toBeInTheDocument();
+  });
+
+  it('handles external storage changes with invalid JSON, non-local namespaces, or missing keys', async () => {
+    let storageListener;
+    global.chrome.storage.onChanged.addListener.mockImplementation((l) => {
+      storageListener = l;
+    });
+
+    await act(async () => { render(<RequestHeadersApp />); });
+
+    // 1. Trigger with non-local namespace (should not change state)
+    await act(async () => {
+      storageListener({ requestHeaders: { newValue: '[]' } }, 'sync');
+    });
+
+    // 2. Trigger with missing requestHeaders key (should not change state)
+    await act(async () => {
+      storageListener({ otherKey: { newValue: '[]' } }, 'local');
+    });
+
+    // 3. Trigger with invalid JSON (hits catch block)
+    await act(async () => {
+      storageListener({ requestHeaders: { newValue: 'invalid-json' } }, 'local');
+    });
+
+    // 4. Trigger with undefined/null newValue
+    await act(async () => {
+      storageListener({ requestHeaders: { newValue: undefined } }, 'local');
+    });
+  });
+
+  it('handles mounting when chrome.storage is undefined', async () => {
+    const originalStorage = global.chrome.storage;
+    delete global.chrome.storage;
+
+    await act(async () => {
+      render(<RequestHeadersApp />);
+    });
+
+    // Verify it doesn't crash
+    expect(screen.queryByText('X-Mock-Header')).not.toBeInTheDocument();
+
+    global.chrome.storage = originalStorage;
+  });
+
+  it('handles mounting when chrome.storage.onChanged is undefined', async () => {
+    const originalOnChanged = global.chrome.storage.onChanged;
+    delete global.chrome.storage.onChanged;
+
+    await act(async () => {
+      render(<RequestHeadersApp />);
+    });
+
+    // Verify it doesn't crash
+    expect(screen.getByText('X-Mock-Header')).toBeInTheDocument();
+
+    global.chrome.storage.onChanged = originalOnChanged;
+  });
 });
 

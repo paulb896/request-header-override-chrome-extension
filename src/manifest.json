@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RequestFlow Pro — HTTP Request Header & Query Param Overrider",
-  "version": "2.0.2",
+  "version": "2.2.0",
   "description": "Effortlessly override, add, or modify HTTP request headers, query parameters, and upstream responses using URL matching.",
   "options_page": "options.html",
   "action": {

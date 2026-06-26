@@ -67,7 +67,8 @@ function ResponseOverridesApp({
     const matchesTerm = (
       (req.url && req.url.toLowerCase().includes(term)) ||
       (req.method && req.method.toLowerCase().includes(term)) ||
-      (req.operationName && req.operationName.toLowerCase().includes(term))
+      (req.operationName && req.operationName.toLowerCase().includes(term)) ||
+      (req.response && req.response.toLowerCase().includes(term))
     );
 
     const matchesMethod = methodFilters.length === 0 || methodFilters.includes(req.method);
@@ -620,7 +621,7 @@ function ResponseOverridesApp({
                         <input
                           type="text"
                           className="input-text"
-                          placeholder="Filter captured requests..."
+                          placeholder="Filter captured requests by URL, method, or response..."
                           value={filterTerm}
                           onChange={(e) => setFilterTerm(e.target.value)}
                           style={{

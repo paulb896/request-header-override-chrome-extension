@@ -100,7 +100,8 @@ const RequestLogsView = ({
     const matchesTerm = (
       (req.url && req.url.toLowerCase().includes(term)) ||
       (req.method && req.method.toLowerCase().includes(term)) ||
-      (req.operationName && req.operationName.toLowerCase().includes(term))
+      (req.operationName && req.operationName.toLowerCase().includes(term)) ||
+      (req.response && req.response.toLowerCase().includes(term))
     );
 
     const matchesMethod = methodFilters.length === 0 || methodFilters.includes(req.method);
@@ -263,7 +264,7 @@ const RequestLogsView = ({
           <input
             type="text"
             className="input-text"
-            placeholder="Search logs by URL or method..."
+            placeholder="Search logs by URL, method, or response..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', padding: '10px 12px', fontSize: '1.2rem' }}

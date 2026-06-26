@@ -10,8 +10,8 @@ describe('RequestLogsView Component', () => {
   beforeEach(() => {
     mockStorage = {
       recentRequests: [
-        { url: 'https://example.com/api', method: 'GET', statusCode: 200, contentType: 'application/json', timestamp: 1000 },
-        { url: 'https://test.com/graphql', method: 'POST', statusCode: 400, operationName: 'GetData', timestamp: 2000 },
+        { url: 'https://example.com/api', method: 'GET', statusCode: 200, contentType: 'application/json', timestamp: 1000, response: '{"success":true,"user":{"name":"Alice"}}' },
+        { url: 'https://test.com/graphql', method: 'POST', statusCode: 400, operationName: 'GetData', timestamp: 2000, response: '{"errors":[{"message":"Unauthorized"}]}' },
         { url: 'https://error.com/foo', method: 'OPTIONS', statusCode: 500, timestamp: 3000 },
         { url: 'https://other.com/bar', method: 'PUT', statusCode: 0, timestamp: 4000 },
         { url: 'https://redirect.com', method: 'PATCH', statusCode: 302, timestamp: 5000 },
@@ -20,7 +20,7 @@ describe('RequestLogsView Component', () => {
       ]
     };
     listeners = [];
-    
+
     global.chrome = {
       storage: {
         local: {
@@ -59,22 +59,32 @@ describe('RequestLogsView Component', () => {
 
   test('filters by search term', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
-    const searchInput = screen.getByPlaceholderText('Search logs by URL or method...');
-    
+    const searchInput = screen.getByPlaceholderText('Search logs by URL, method, or response...');
+
     fireEvent.change(searchInput, { target: { value: 'graphql' } });
-    
+
     expect(screen.queryByText('https://example.com/api')).not.toBeInTheDocument();
     expect(screen.getByText('https://test.com/graphql')).toBeInTheDocument();
+  });
+
+  test('filters by response data', () => {
+    render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+    const searchInput = screen.getByPlaceholderText('Search logs by URL, method, or response...');
+
+    fireEvent.change(searchInput, { target: { value: 'Alice' } });
+
+    expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
+    expect(screen.queryByText('https://test.com/graphql')).not.toBeInTheDocument();
   });
 
   test('filters by method', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
     const postFilterBtn = screen.getAllByText('POST')[0];
-    
+
     fireEvent.click(postFilterBtn);
     expect(screen.queryByText('https://example.com/api')).not.toBeInTheDocument();
     expect(screen.getByText('https://test.com/graphql')).toBeInTheDocument();
-    
+
     // Toggle off
     fireEvent.click(postFilterBtn);
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
@@ -95,7 +105,7 @@ describe('RequestLogsView Component', () => {
   test('filters by status code', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
     const errorFilterBtn = screen.getByText('Any Error');
-    
+
     fireEvent.click(errorFilterBtn);
     expect(screen.queryByText('https://example.com/api')).not.toBeInTheDocument();
     expect(screen.getByText('https://error.com/foo')).toBeInTheDocument();
@@ -107,7 +117,7 @@ describe('RequestLogsView Component', () => {
     fireEvent.click(successFilterBtn);
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
     expect(screen.queryByText('https://test.com/graphql')).not.toBeInTheDocument();
-    
+
     const status3xx = screen.getByText('3xx Redirect');
     fireEvent.click(status3xx);
     expect(screen.getByText('https://redirect.com')).toBeInTheDocument();
@@ -115,7 +125,7 @@ describe('RequestLogsView Component', () => {
     const status4xx = screen.getByText('4xx Error');
     fireEvent.click(status4xx);
     expect(screen.getByText('https://test.com/graphql')).toBeInTheDocument();
-    
+
     const status5xx = screen.getByText('5xx Error');
     fireEvent.click(status5xx);
     expect(screen.getByText('https://error.com/foo')).toBeInTheDocument();
@@ -124,10 +134,10 @@ describe('RequestLogsView Component', () => {
   test('clears logs', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
-    
+
     const clearBtn = screen.getByText('Clear Logs');
     fireEvent.click(clearBtn);
-    
+
     expect(chrome.storage.local.set).toHaveBeenCalledWith({ recentRequests: [] });
     expect(screen.getByText(/No network requests intercepted yet/i)).toBeInTheDocument();
   });
@@ -135,33 +145,33 @@ describe('RequestLogsView Component', () => {
   test('handles selecting a request', () => {
     const handleSelect = jest.fn();
     render(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={null} />);
-    
+
     const row = screen.getByText('https://example.com/api').closest('tr');
     fireEvent.click(row);
-    
+
     expect(handleSelect).toHaveBeenCalledWith(mockStorage.recentRequests[0]);
   });
 
   test('keyboard navigation ArrowDown and ArrowUp', () => {
     const handleSelect = jest.fn();
     const selected = mockStorage.recentRequests[1]; // POST test.com
-    
+
     const { container, rerender } = render(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={selected} />);
     expect(screen.getByText(/GetData/)).toBeInTheDocument();
-    
+
     // Simulate mouse enter to activate hover mode
     const scrollContainer = container.querySelectorAll('.custom-scroll')[1];
     fireEvent.mouseEnter(scrollContainer);
     fireEvent.mouseOver(scrollContainer);
-    
+
     // Arrow down
     fireEvent(window, new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(handleSelect).toHaveBeenCalledWith(mockStorage.recentRequests[2]); // Next item
-    
+
     // Arrow up
     fireEvent(window, new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
     expect(handleSelect).toHaveBeenCalledWith(mockStorage.recentRequests[0]); // Prev item
-    
+
     // Arrow up when at top should not go out of bounds
     handleSelect.mockClear();
     rerender(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={mockStorage.recentRequests[0]} />);
@@ -186,14 +196,14 @@ describe('RequestLogsView Component', () => {
   test('keyboard navigation ignores if typing in input', () => {
     const handleSelect = jest.fn();
     const selected = mockStorage.recentRequests[1];
-    
+
     const { container } = render(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={selected} />);
     const scrollContainer = container.querySelectorAll('.custom-scroll')[1];
     fireEvent.mouseEnter(scrollContainer);
 
-    const input = screen.getByPlaceholderText('Search logs by URL or method...');
+    const input = screen.getByPlaceholderText('Search logs by URL, method, or response...');
     input.focus();
-    
+
     fireEvent(input, new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(handleSelect).not.toHaveBeenCalled();
   });
@@ -206,18 +216,18 @@ describe('RequestLogsView Component', () => {
 
   test('handles no chrome storage gracefully', () => {
     const originalStorage = global.chrome.storage;
-    
+
     // 1. Test clearLogs when storage is undefined
     const { unmount } = render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
-    
+
     delete global.chrome.storage;
     const clearBtn = screen.getByText('Clear Logs');
     fireEvent.click(clearBtn);
-    
+
     global.chrome.storage = originalStorage;
     unmount();
-    
+
     // 2. Test mount useEffect when storage is undefined
     delete global.chrome.storage;
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
@@ -228,31 +238,31 @@ describe('RequestLogsView Component', () => {
 
   test('empty search results message', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
-    const searchInput = screen.getByPlaceholderText('Search logs by URL or method...');
-    
+    const searchInput = screen.getByPlaceholderText('Search logs by URL, method, or response...');
+
     fireEvent.change(searchInput, { target: { value: 'nomatchwillbefound' } });
-    
+
     expect(screen.getByText(/No requests matching active filters/i)).toBeInTheDocument();
   });
 
   test('filters by type (GraphQL and JSON)', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
-    
+
     const graphqlBtn = screen.getByRole('button', { name: 'GraphQL' });
     fireEvent.click(graphqlBtn);
-    
+
     expect(screen.getByText('https://test.com/graphql')).toBeInTheDocument();
     expect(screen.queryByText('https://example.com/api')).not.toBeInTheDocument();
-    
+
     fireEvent.click(graphqlBtn);
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
-    
+
     const jsonBtn = screen.getByRole('button', { name: 'JSON' });
     fireEvent.click(jsonBtn);
-    
+
     expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
     expect(screen.queryByText('https://test.com/graphql')).not.toBeInTheDocument();
-    
+
     fireEvent.click(jsonBtn);
   });
 
@@ -261,7 +271,7 @@ describe('RequestLogsView Component', () => {
     const { container } = render(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={null} />);
     const scrollContainer = container.querySelectorAll('.custom-scroll')[1];
     fireEvent.mouseEnter(scrollContainer);
-    
+
     fireEvent(window, new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(handleSelect).not.toHaveBeenCalled();
   });
@@ -321,7 +331,7 @@ describe('RequestLogsView Component', () => {
     const { container } = render(<RequestLogsView onSelectRequest={handleSelect} selectedRequest={notInListReq} />);
     const scrollContainer = container.querySelectorAll('.custom-scroll')[1];
     fireEvent.mouseEnter(scrollContainer);
-    
+
     fireEvent(window, new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(handleSelect).not.toHaveBeenCalled();
   });
@@ -372,7 +382,7 @@ describe('RequestLogsView Component', () => {
 
   test('updates inline state when storage changes requestCollectingEnabled', () => {
     render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
-    
+
     act(() => {
       listeners.forEach(l => l({
         requestCollectingEnabled: {

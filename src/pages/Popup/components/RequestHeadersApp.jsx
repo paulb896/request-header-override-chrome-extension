@@ -155,6 +155,26 @@ function RequestHeadersApp() {
     initializeHeaders();
   }, [isLoadedFromStorage]);
 
+  useEffect(() => {
+    if (!chrome.storage) return;
+
+    const listener = (changes, namespace) => {
+      if (namespace === 'local' && changes[CONSTANTS.STORAGE_KEY]) {
+        try {
+          const parsed = JSON.parse(changes[CONSTANTS.STORAGE_KEY].newValue || '[]');
+          setHeaders(parsed);
+        } catch (e) {
+          setHeaders([]);
+        }
+      }
+    };
+
+    if (chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    }
+  }, []);
+
   return (
     <div
       className="request-header-app"

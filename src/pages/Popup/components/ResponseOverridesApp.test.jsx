@@ -157,8 +157,8 @@ describe('ResponseOverridesApp', () => {
       if (msg.type === 'GET_RECENT_REQUESTS') {
         cb({
           requests: [
-            { url: 'https://recent.com', method: 'GET', statusCode: 200 },
-            { url: 'https://other.com', method: 'POST', statusCode: 404 },
+            { url: 'https://recent.com', method: 'GET', statusCode: 200, response: '{"data":"Alice"}' },
+            { url: 'https://other.com', method: 'POST', statusCode: 404, response: '{"error":"Not Found"}' },
             { url: 'https://graphql.com', method: 'POST', operationName: 'MyQuery', statusCode: 200 },
             { url: 'https://pending.com', method: 'GET' }, // no statusCode
             { url: 'https://options.com', method: 'OPTIONS', statusCode: 200 }
@@ -180,10 +180,15 @@ describe('ResponseOverridesApp', () => {
     });
 
     // Term filter
-    const filterInput = screen.getByPlaceholderText('Filter captured requests...');
+    const filterInput = screen.getByPlaceholderText('Filter captured requests by URL, method, or response...');
     fireEvent.change(filterInput, { target: { value: 'other' } });
     expect(screen.getByText('https://other.com')).toBeInTheDocument();
     expect(screen.queryByText('https://recent.com')).not.toBeInTheDocument();
+
+    // Response filter
+    fireEvent.change(filterInput, { target: { value: 'Alice' } });
+    expect(screen.getByText('https://recent.com')).toBeInTheDocument();
+    expect(screen.queryByText('https://other.com')).not.toBeInTheDocument();
     
     // Non-matching term (covers operationName falsy check and empty results view)
     fireEvent.change(filterInput, { target: { value: 'xyz' } });
