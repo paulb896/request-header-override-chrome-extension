@@ -13,29 +13,71 @@ const Popup = ({ isOptionsPage = false }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [requestCollectingEnabled, setRequestCollectingEnabledState] = useState(false);
   const [responseOverridesEnabled, setResponseOverridesEnabledState] = useState(false);
+  const [requestBodyOverridesEnabled, setRequestBodyOverridesEnabledState] = useState(false);
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
 
   useEffect(() => {
     if (chrome.storage) {
-      chrome.storage.local.get(['theme', 'requestCollectingEnabled', 'responseOverridesEnabled'], (result) => {
-        if (result.theme) {
-          setTheme(result.theme);
-        } else if (
-          window.matchMedia &&
-          window.matchMedia('(prefers-color-scheme: light)').matches
-        ) {
-          setTheme('light');
+      chrome.storage.local.get(
+        [
+          'theme',
+          'requestCollectingEnabled',
+          'responseOverridesEnabled',
+          'requestBodyOverridesEnabled',
+          'rho_activeTab',
+          'rho_selectedRequest',
+        ],
+        (result) => {
+          if (result.theme) {
+            setTheme(result.theme);
+          } else if (
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: light)').matches
+          ) {
+            setTheme('light');
+          }
+          if (result.requestCollectingEnabled !== undefined) {
+            setRequestCollectingEnabledState(result.requestCollectingEnabled);
+          } else {
+            setRequestCollectingEnabledState(false);
+          }
+          if (result.responseOverridesEnabled !== undefined) {
+            setResponseOverridesEnabledState(result.responseOverridesEnabled);
+          } else {
+            setResponseOverridesEnabledState(false);
+          }
+          if (result.requestBodyOverridesEnabled !== undefined) {
+            setRequestBodyOverridesEnabledState(result.requestBodyOverridesEnabled);
+          } else {
+            setRequestBodyOverridesEnabledState(false);
+          }
+          if (result.rho_activeTab) {
+            setActiveTab(result.rho_activeTab);
+          }
+          if (result.rho_selectedRequest !== undefined) {
+            setSelectedRequest(result.rho_selectedRequest);
+          }
+          setIsStorageLoaded(true);
         }
-        if (result.requestCollectingEnabled !== undefined) {
-          setRequestCollectingEnabledState(result.requestCollectingEnabled);
-        } else {
-          setRequestCollectingEnabledState(false);
+      );
+
+      const listener = (changes, namespace) => {
+        if (namespace === 'local') {
+          if (changes.rho_activeTab) {
+            setActiveTab(changes.rho_activeTab.newValue || 'dashboard');
+          }
+          if (changes.rho_selectedRequest) {
+            setSelectedRequest(changes.rho_selectedRequest.newValue || null);
+          }
+          if (changes.requestBodyOverridesEnabled) {
+            setRequestBodyOverridesEnabledState(changes.requestBodyOverridesEnabled.newValue || false);
+          }
         }
-        if (result.responseOverridesEnabled !== undefined) {
-          setResponseOverridesEnabledState(result.responseOverridesEnabled);
-        } else {
-          setResponseOverridesEnabledState(false);
-        }
-      });
+      };
+      chrome.storage.onChanged.addListener(listener);
+      return () => chrome.storage.onChanged.removeListener(listener);
+    } else {
+      setIsStorageLoaded(true);
     }
   }, []);
 
@@ -55,6 +97,20 @@ const Popup = ({ isOptionsPage = false }) => {
     }
   };
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (chrome.storage) {
+      chrome.storage.local.set({ rho_activeTab: tab });
+    }
+  };
+
+  const handleSelectRequest = (req) => {
+    setSelectedRequest(req);
+    if (chrome.storage) {
+      chrome.storage.local.set({ rho_selectedRequest: req });
+    }
+  };
+
   const setRequestCollectingEnabled = (val) => {
     setRequestCollectingEnabledState(val);
     if (chrome.storage) {
@@ -69,26 +125,36 @@ const Popup = ({ isOptionsPage = false }) => {
     }
   };
 
+  const setRequestBodyOverridesEnabled = (val) => {
+    setRequestBodyOverridesEnabledState(val);
+    if (chrome.storage) {
+      chrome.storage.local.set({ requestBodyOverridesEnabled: val });
+    }
+  };
+
   const renderContent = () => {
+    if (!isStorageLoaded) {
+      return <div className="main-content" style={{ flex: 1 }} />;
+    }
     switch (activeTab) {
       case 'dashboard':
         return (
           <DashboardView
             responseOverridesEnabled={responseOverridesEnabled}
             setResponseOverridesEnabled={setResponseOverridesEnabled}
+            requestBodyOverridesEnabled={requestBodyOverridesEnabled}
+            setRequestBodyOverridesEnabled={setRequestBodyOverridesEnabled}
           />
         );
       case 'logs':
         return (
           <RequestLogsView
-            onSelectRequest={setSelectedRequest}
+            onSelectRequest={handleSelectRequest}
             selectedRequest={selectedRequest}
             requestCollectingEnabled={requestCollectingEnabled}
             setRequestCollectingEnabled={setRequestCollectingEnabled}
           />
         );
-
-
       case 'settings':
         return (
           <div className="main-content" style={{ overflowY: 'auto' }}>
@@ -156,6 +222,31 @@ const Popup = ({ isOptionsPage = false }) => {
                   <span className="switch-slider"></span>
                 </label>
               </div>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0' }} />
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '1.4rem', fontWeight: '500' }}>Request Body Overrides</span>
+                  <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Intercept matching requests and override request payloads sent to the server.
+                  </span>
+                </div>
+                <label className="switch-container" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    className="switch-input"
+                    checked={requestBodyOverridesEnabled}
+                    onChange={(e) => setRequestBodyOverridesEnabled(e.target.checked)}
+                    aria-label="Toggle Request Body Overrides"
+                  />
+                  <span className="switch-slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         );
@@ -176,7 +267,7 @@ const Popup = ({ isOptionsPage = false }) => {
       >
         <TopNav
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           hideOpenTab={isOptionsPage}
           theme={theme}
           toggleTheme={toggleTheme}
@@ -187,7 +278,7 @@ const Popup = ({ isOptionsPage = false }) => {
             selectedRequest && (
               <InspectorPanel
                 selectedRequest={selectedRequest}
-                onClose={() => setSelectedRequest(null)}
+                onClose={() => handleSelectRequest(null)}
                 isFullScreen={isOptionsPage}
               />
             )}

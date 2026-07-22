@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import RequestHeadersApp from './RequestHeadersApp';
 
@@ -99,6 +99,12 @@ describe('RequestHeadersApp', () => {
     await act(async () => { render(<RequestHeadersApp />); });
     const deleteButtons = await screen.findAllByRole('button', { name: /Delete/i });
     fireEvent.click(deleteButtons[0]);
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
     expect(global.chrome.storage.local.set).toHaveBeenCalled();
   });
 

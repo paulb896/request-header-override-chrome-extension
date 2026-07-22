@@ -7,7 +7,8 @@ jest.mock('./JsonEditor', () => {
   return function MockJsonEditor(props) {
     return (
       <textarea
-        data-testid="json-editor"
+        data-testid={props['data-testid'] || 'json-editor'}
+        placeholder={props.placeholder}
         value={props.value || ''}
         onChange={(e) => props.onChange(e.target.value)}
       />
@@ -16,26 +17,38 @@ jest.mock('./JsonEditor', () => {
 });
 
 describe('ResponseOverridesApp', () => {
+  let mockStoreData = {};
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStoreData = {
+      responseOverrides: [
+        {
+          id: 'mock-1',
+          matchUrl: 'https://api.example.com/data',
+          mockResponse: '{"data": "mocked"}',
+          matchRequestBody: 'test-body',
+          active: true,
+        },
+        {
+          id: 'mock-2',
+          matchUrl: 'https://api.example.com/empty',
+          mockResponse: '',
+          active: false,
+        },
+      ],
+    };
     global.chrome.storage.local.get.mockImplementation((keys, cb) => {
-      cb({
-        responseOverrides: [
-          {
-            id: 'mock-1',
-            matchUrl: 'https://api.example.com/data',
-            mockResponse: '{"data": "mocked"}',
-            matchRequestBody: 'test-body',
-            active: true,
-          },
-          {
-            id: 'mock-2',
-            matchUrl: 'https://api.example.com/empty',
-            mockResponse: '',
-            active: false,
-          },
-        ],
-      });
+      let result = {};
+      if (typeof keys === 'string') {
+        result[keys] = mockStoreData[keys];
+      } else if (Array.isArray(keys)) {
+        keys.forEach(k => { result[k] = mockStoreData[k]; });
+      }
+      cb(result);
+    });
+    global.chrome.storage.local.set.mockImplementation((data, cb) => {
+      Object.assign(mockStoreData, data);
+      cb && cb();
     });
   });
 
@@ -67,7 +80,9 @@ describe('ResponseOverridesApp', () => {
     fireEvent.click(activeBtn);
 
     expect(global.chrome.storage.local.set).toHaveBeenCalled();
-    const setArgs = global.chrome.storage.local.set.mock.calls[0][0];
+    const setCall = global.chrome.storage.local.set.mock.calls.find(c => c[0].responseOverrides);
+    expect(setCall).toBeDefined();
+    const setArgs = setCall[0];
     expect(setArgs.responseOverrides[0].active).toBe(false);
   });
 
@@ -113,9 +128,75 @@ describe('ResponseOverridesApp', () => {
     fireEvent.click(addBtn);
 
     expect(global.chrome.storage.local.set).toHaveBeenCalled();
-    const setArgs = global.chrome.storage.local.set.mock.calls[0][0];
+    const setCall = global.chrome.storage.local.set.mock.calls.find(c => c[0].responseOverrides);
+    expect(setCall).toBeDefined();
+    const setArgs = setCall[0];
     expect(setArgs.responseOverrides.length).toBe(3);
     expect(setArgs.responseOverrides[0].matchUrl).toBe('/api');
+  });
+
+  it('can add a new mock from recent POST and GraphQL requests with correct matchRequestBody', async () => {
+    global.chrome.runtime.sendMessage.mockImplementation((msg, cb) => {
+      if (msg.type === 'GET_RECENT_REQUESTS') {
+        cb({
+          requests: [
+            { id: 'req-post', url: 'https://test.com/api/post', method: 'POST', requestBody: '{"param":"value"}' },
+            { id: 'req-graphql', url: 'https://test.com/graphql', method: 'POST', requestBody: '{"operationName":"MyMutation"}', operationName: 'MyMutation' },
+          ],
+        });
+      }
+    });
+
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+
+    // Toggle recent requests list
+    const toggleBtn = screen.getByText(/View Recent Requests to Mock/i);
+    fireEvent.click(toggleBtn);
+
+    // Wait for the recent request to show up
+    await waitFor(() => {
+      expect(screen.getByText('https://test.com/api/post')).toBeInTheDocument();
+    });
+
+    // Click on the Mock button for the GraphQL request
+    const mockBtns = screen.getAllByText('Mock');
+    fireEvent.click(mockBtns[1]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Target Route')).toBeInTheDocument();
+    });
+
+    // Verify the matchRequestBody input is set to GraphQL pattern
+    expect(screen.getByTestId('request-body-editor').value).toBe('"operationName":"MyMutation"');
+
+    // Click Save Response Mock
+    fireEvent.change(screen.getByTestId('json-editor'), {
+      target: { value: '{"ok":true}' },
+    });
+    fireEvent.click(screen.getByText('Save Response Mock'));
+
+    expect(global.chrome.storage.local.set).toHaveBeenCalled();
+    const setCall = global.chrome.storage.local.set.mock.calls.find(c => c[0].responseOverrides);
+    expect(setCall).toBeDefined();
+    let setArgs = setCall[0];
+    expect(setArgs.responseOverrides[0].matchUrl).toBe('/graphql');
+    expect(setArgs.responseOverrides[0].matchRequestBody).toBe('"operationName":"MyMutation"');
+
+    // Click recent requests list to mock standard POST request
+    fireEvent.click(screen.getByText(/View Recent Requests to Mock/i));
+    await waitFor(() => {
+      expect(screen.getByText('https://test.com/api/post')).toBeInTheDocument();
+    });
+    const newMockBtns = screen.getAllByText('Mock');
+    fireEvent.click(newMockBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Target Route')).toBeInTheDocument();
+    });
+
+    // Verify standard POST body is populated
+    expect(screen.getByTestId('request-body-editor').value).toBe('{"param":"value"}');
   });
 
   it('fetches recent requests when View Recent Network Requests is toggled', async () => {
@@ -147,8 +228,15 @@ describe('ResponseOverridesApp', () => {
     const deleteBtn = screen.getAllByText('Delete')[0];
     fireEvent.click(deleteBtn);
 
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
     expect(global.chrome.storage.local.set).toHaveBeenCalled();
-    const setArgs = global.chrome.storage.local.set.mock.calls[0][0];
+    const setCall = global.chrome.storage.local.set.mock.calls.find(c => c[0].responseOverrides);
+    expect(setCall).toBeDefined();
+    const setArgs = setCall[0];
     expect(setArgs.responseOverrides.length).toBe(1);
   });
 
@@ -255,7 +343,9 @@ describe('ResponseOverridesApp', () => {
     fireEvent.click(updateBtn);
 
     expect(global.chrome.storage.local.set).toHaveBeenCalled();
-    const setArgs = global.chrome.storage.local.set.mock.calls[0][0];
+    const setCall = global.chrome.storage.local.set.mock.calls.find(c => c[0].responseOverrides);
+    expect(setCall).toBeDefined();
+    const setArgs = setCall[0];
     expect(setArgs.responseOverrides[0].matchUrl).toBe('https://saved.url');
 
     // Click edit on mock-2 (covers o.matchRequestBody || '' fallback)
@@ -812,6 +902,54 @@ describe('ResponseOverridesApp', () => {
     fireEvent.click(toggle);
     expect(screen.queryByLabelText('Toggle Response Overrides Inline')).not.toBeInTheDocument();
     global.chrome.storage = originalStorage;
+  });
+
+  it('synchronizes filters and showRequests state to and from storage', async () => {
+    mockStoreData.rho_mocksFilterTerm = 'empty';
+    mockStoreData.rho_mocksShowRequests = true;
+
+    global.chrome.runtime.sendMessage.mockImplementation((msg, cb) => {
+      if (msg.type === 'GET_RECENT_REQUESTS') {
+        cb({
+          requests: [
+            { id: 'req-1', url: 'https://api.recent.com/empty', method: 'GET' },
+            { id: 'req-2', url: 'https://api.recent.com/data', method: 'GET' },
+          ],
+        });
+      }
+    });
+
+    const testListeners = [];
+    global.chrome.storage.onChanged.addListener.mockImplementation((listener) => {
+      testListeners.push(listener);
+    });
+
+    render(<ResponseOverridesApp />);
+    fireEvent.click(screen.getByText('Response Interceptor'));
+
+    // Verify filter is loaded on mount
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Filter captured requests by URL, method, or response...').value).toBe('empty');
+    });
+
+    // Verify filter matches only req-1
+    expect(screen.getByText('https://api.recent.com/empty')).toBeInTheDocument();
+    expect(screen.queryByText('https://api.recent.com/data')).not.toBeInTheDocument();
+
+    // Verify showRequests (View Recent Requests to Mock...) was enabled on mount
+    expect(screen.getByText('Close Network Logs')).toBeInTheDocument();
+
+    // Update filter term and showRequests via storage listener
+    act(() => {
+      testListeners.forEach(l => l({
+        rho_mocksFilterTerm: { newValue: 'data' },
+        rho_mocksShowRequests: { newValue: false }
+      }, 'local'));
+    });
+
+    // Since showRequests is now false, the Close Network Logs is replaced with View Recent Requests...
+    expect(screen.getByText('View Recent Requests to Mock...')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Filter captured requests by URL, method, or response...')).not.toBeInTheDocument();
   });
 });
 

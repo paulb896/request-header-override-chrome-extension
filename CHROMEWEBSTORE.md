@@ -115,5 +115,6 @@ https://github.com/paulb896/request-header-override-chrome-extension
 
 | Version | Date       | Changes                                                                                                                                                        | Status    |
 | ------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2.2.0   | 2026-06-26 | Add ability to search through response data, fix concurrent tab state updates issue.                                                                           | Draft     |
 | 2.0.0   | 2026-06-19 | Overhauled popup to 3-column dashboard; added Options page full-tab support; added Response Mock rules; added Light/Dark mode themes; updated graphics assets. | Draft     |
 | 1.0.1   | 2026-01-04 | Initial version supporting basic header overrides and popup UI.                                                                                                | Published |

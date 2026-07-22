@@ -1,12 +1,19 @@
 import React from 'react';
 import RequestHeadersApp from './RequestHeadersApp';
 import ResponseOverridesApp from './ResponseOverridesApp';
+import RequestBodyOverridesApp from './RequestBodyOverridesApp';
 
-const DashboardView = ({ responseOverridesEnabled, setResponseOverridesEnabled }) => {
+const DashboardView = ({
+  responseOverridesEnabled,
+  setResponseOverridesEnabled,
+  requestBodyOverridesEnabled,
+  setRequestBodyOverridesEnabled,
+}) => {
   return (
     <div
       className="main-content custom-scroll"
       style={{ overflowY: 'auto', overflowX: 'hidden' }}
+      data-testid="dashboard-view"
     >
       <div
         className="card-panel"
@@ -62,6 +69,28 @@ const DashboardView = ({ responseOverridesEnabled, setResponseOverridesEnabled }
               hideRecentRequests={true}
               responseOverridesEnabled={responseOverridesEnabled}
               setResponseOverridesEnabled={setResponseOverridesEnabled}
+            />
+          </div>
+          <div
+            style={{
+              height: '1px',
+              background: 'var(--border-color)',
+              width: '100%',
+            }}
+          ></div>
+          <div>
+            <h3
+              style={{
+                marginBottom: '12px',
+                fontSize: '1.3rem',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Request Body Overrides
+            </h3>
+            <RequestBodyOverridesApp
+              requestBodyOverridesEnabled={requestBodyOverridesEnabled}
+              setRequestBodyOverridesEnabled={setRequestBodyOverridesEnabled}
             />
           </div>
         </div>

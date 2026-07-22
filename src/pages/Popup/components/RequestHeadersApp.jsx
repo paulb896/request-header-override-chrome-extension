@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import AddRequestHeaderForm from './AddRequestHeaderForm';
 import RequestHeader from './RequestHeader';
+import ConfirmModal from './ConfirmModal';
 
 import {
   CONSTANTS,
@@ -13,6 +14,7 @@ import {
 
 function RequestHeadersApp() {
   const [headers, setHeaders] = useState([]);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
 
   const listHeadingRef = useRef(null);
@@ -87,7 +89,7 @@ function RequestHeadersApp() {
       url-regex={header.urlRegex}
       overrideType={header.overrideType || CONSTANTS.DEFAULT_OVERRIDE_TYPE}
       toggleHeaderEnabled={toggleHeaderEnabled}
-      deleteHeader={deleteHeader}
+      deleteHeader={(id) => setDeleteTargetId(id)}
       editHeader={editHeader}
     />
   );
@@ -292,6 +294,17 @@ function RequestHeadersApp() {
       >
         {renderHeaderList()}
       </ul>
+
+      <ConfirmModal
+        isOpen={!!deleteTargetId}
+        title="Delete Header Override"
+        message="Are you sure you want to delete this header / parameter override rule?"
+        onConfirm={() => {
+          deleteHeader(deleteTargetId);
+          setDeleteTargetId(null);
+        }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
     </div>
   );
 }

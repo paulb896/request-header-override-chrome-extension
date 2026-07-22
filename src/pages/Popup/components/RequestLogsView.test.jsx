@@ -26,8 +26,12 @@ describe('RequestLogsView Component', () => {
         local: {
           get: jest.fn((keys, cb) => cb(mockStorage)),
           set: jest.fn((data) => {
+            const changes = {};
+            Object.keys(data).forEach((key) => {
+              changes[key] = { newValue: data[key] };
+            });
             Object.assign(mockStorage, data);
-            listeners.forEach(l => l({ recentRequests: { newValue: data.recentRequests } }, 'local'));
+            listeners.forEach(l => l(changes, 'local'));
           }),
         },
         onChanged: {
@@ -411,6 +415,37 @@ describe('RequestLogsView Component', () => {
     fireEvent.click(toggle);
     expect(screen.queryByLabelText('Toggle Request Collecting Inline')).not.toBeInTheDocument();
     global.chrome.storage = originalStorage;
+  });
+
+  test('synchronizes filter and search state to and from storage', async () => {
+    mockStorage.rho_logsSearchTerm = 'graphql';
+    mockStorage.rho_logsMethodFilters = ['POST'];
+    mockStorage.rho_logsStatusFilters = ['4xx'];
+    mockStorage.rho_logsTypeFilters = ['graphql'];
+
+    render(<RequestLogsView onSelectRequest={jest.fn()} selectedRequest={null} />);
+
+    // Expect search input to have the value
+    const searchInput = screen.getByPlaceholderText('Search logs by URL, method, or response...');
+    expect(searchInput.value).toBe('graphql');
+
+    // Only graphql request matches all these filters
+    expect(screen.getByText('https://test.com/graphql')).toBeInTheDocument();
+    expect(screen.queryByText('https://example.com/api')).not.toBeInTheDocument();
+
+    // Trigger state change via storage.onChanged
+    act(() => {
+      listeners.forEach(l => l({
+        rho_logsSearchTerm: { newValue: 'api' },
+        rho_logsMethodFilters: { newValue: ['GET'] },
+        rho_logsStatusFilters: { newValue: ['2xx'] },
+        rho_logsTypeFilters: { newValue: [] }
+      }, 'local'));
+    });
+
+    expect(searchInput.value).toBe('api');
+    expect(screen.getByText('https://example.com/api')).toBeInTheDocument();
+    expect(screen.queryByText('https://test.com/graphql')).not.toBeInTheDocument();
   });
 });
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateRandomId } from '../../../../utils/index';
 import JsonEditor from './JsonEditor';
+import ConfirmModal from './ConfirmModal';
 
 const formatJsonString = (str) => {
   if (!str) return '';
@@ -19,6 +20,7 @@ function ResponseOverridesApp({
   setResponseOverridesEnabled: propSetEnabled,
 }) {
   const [overrides, setOverrides] = useState([]);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [recentRequests, setRecentRequests] = useState([]);
   const [filterTerm, setFilterTerm] = useState('');
   const [methodFilters, setMethodFilters] = useState([]);
@@ -61,6 +63,95 @@ function ResponseOverridesApp({
       }
     }
   }, [propEnabled]);
+
+  const filterTermRef = useRef(filterTerm);
+  const mocksMethodFiltersRef = useRef(methodFilters);
+  const mocksStatusFiltersRef = useRef(statusFilters);
+  const mocksTypeFiltersRef = useRef(typeFilters);
+  const showRequestsRef = useRef(showRequests);
+  const isLoadedRef = useRef(false);
+
+  useEffect(() => { filterTermRef.current = filterTerm; }, [filterTerm]);
+  useEffect(() => { mocksMethodFiltersRef.current = methodFilters; }, [methodFilters]);
+  useEffect(() => { mocksStatusFiltersRef.current = statusFilters; }, [statusFilters]);
+  useEffect(() => { mocksTypeFiltersRef.current = typeFilters; }, [typeFilters]);
+  useEffect(() => { showRequestsRef.current = showRequests; }, [showRequests]);
+
+  useEffect(() => {
+    if (chrome.storage) {
+      chrome.storage.local.get([
+        'rho_mocksFilterTerm',
+        'rho_mocksMethodFilters',
+        'rho_mocksStatusFilters',
+        'rho_mocksTypeFilters',
+        'rho_mocksShowRequests'
+      ], (result) => {
+        if (result.rho_mocksFilterTerm !== undefined) setFilterTerm(result.rho_mocksFilterTerm);
+        if (result.rho_mocksMethodFilters !== undefined) setMethodFilters(result.rho_mocksMethodFilters);
+        if (result.rho_mocksStatusFilters !== undefined) setStatusFilters(result.rho_mocksStatusFilters);
+        if (result.rho_mocksTypeFilters !== undefined) setTypeFilters(result.rho_mocksTypeFilters);
+        if (result.rho_mocksShowRequests !== undefined) setShowRequests(result.rho_mocksShowRequests);
+        
+        setTimeout(() => {
+          isLoadedRef.current = true;
+        }, 0);
+      });
+
+      const listener = (changes, namespace) => {
+        if (namespace === 'local') {
+          if (changes.rho_mocksFilterTerm && changes.rho_mocksFilterTerm.newValue !== filterTermRef.current) {
+            setFilterTerm(changes.rho_mocksFilterTerm.newValue || '');
+          }
+          if (changes.rho_mocksMethodFilters && JSON.stringify(changes.rho_mocksMethodFilters.newValue) !== JSON.stringify(mocksMethodFiltersRef.current)) {
+            setMethodFilters(changes.rho_mocksMethodFilters.newValue || []);
+          }
+          if (changes.rho_mocksStatusFilters && JSON.stringify(changes.rho_mocksStatusFilters.newValue) !== JSON.stringify(mocksStatusFiltersRef.current)) {
+            setStatusFilters(changes.rho_mocksStatusFilters.newValue || []);
+          }
+          if (changes.rho_mocksTypeFilters && JSON.stringify(changes.rho_mocksTypeFilters.newValue) !== JSON.stringify(mocksTypeFiltersRef.current)) {
+            setTypeFilters(changes.rho_mocksTypeFilters.newValue || []);
+          }
+          if (changes.rho_mocksShowRequests && changes.rho_mocksShowRequests.newValue !== showRequestsRef.current) {
+            setShowRequests(changes.rho_mocksShowRequests.newValue || false);
+          }
+        }
+      };
+      if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(listener);
+        return () => chrome.storage.onChanged.removeListener(listener);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_mocksFilterTerm: filterTerm });
+    }
+  }, [filterTerm]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_mocksMethodFilters: methodFilters });
+    }
+  }, [methodFilters]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_mocksStatusFilters: statusFilters });
+    }
+  }, [statusFilters]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_mocksTypeFilters: typeFilters });
+    }
+  }, [typeFilters]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_mocksShowRequests: showRequests });
+    }
+  }, [showRequests]);
 
   const filteredRequests = recentRequests.filter((req) => {
     const term = filterTerm.toLowerCase();
@@ -165,12 +256,14 @@ function ResponseOverridesApp({
     });
   };
 
-  const toggleShowRequests = () => {
-    const nextVal = !showRequests;
-    setShowRequests(nextVal);
-    if (nextVal) {
+  useEffect(() => {
+    if (showRequests) {
       loadRecentRequests();
     }
+  }, [showRequests]);
+
+  const toggleShowRequests = () => {
+    setShowRequests(!showRequests);
   };
 
   const populateFromRequest = (req) => {
@@ -186,6 +279,17 @@ function ResponseOverridesApp({
 
     setMatchUrl(urlToMatch);
     setMockResponse(formattedResponse);
+
+    if (req.method && req.method.toUpperCase() !== 'GET') {
+      if (req.operationName) {
+        setMatchRequestBody(`"operationName":"${req.operationName}"`);
+      } else {
+        setMatchRequestBody(req.requestBody || '');
+      }
+    } else {
+      setMatchRequestBody('');
+    }
+
     setShowRequests(false);
   };
 
@@ -225,6 +329,7 @@ function ResponseOverridesApp({
   };
 
   const saveEditing = (id) => {
+    if (!editingMatchUrl.trim() || !editingMockResponse.trim()) return;
     const nextOverrides = overrides.map((o) =>
       o.id === id
         ? {
@@ -462,13 +567,19 @@ function ResponseOverridesApp({
                 >
                   Request Body Match (Optional)
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  className="input-text custom-scroll"
                   value={matchRequestBody}
                   onChange={(e) => setMatchRequestBody(e.target.value)}
-                  className="input-text"
-                  placeholder='e.g. "operationName":"MyMutation"'
-                  style={{ fontFamily: 'monospace' }}
+                  placeholder='e.g. "operationName":"MyMutation" or JSON payload...'
+                  data-testid="request-body-editor"
+                  style={{
+                    height: '250px',
+                    fontFamily: 'monospace',
+                    resize: 'vertical',
+                    fontSize: '1.2rem',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
               <div>
@@ -911,13 +1022,19 @@ function ResponseOverridesApp({
                       >
                         Request Body Match (Optional)
                       </label>
-                      <input
-                        type="text"
+                      <textarea
+                        className="input-text custom-scroll"
                         value={editingMatchRequestBody}
                         onChange={(e) => setEditingMatchRequestBody(e.target.value)}
-                        className="input-text"
-                        placeholder='e.g. "operationName":"MyMutation"'
-                        style={{ fontFamily: 'monospace' }}
+                        placeholder='e.g. "operationName":"MyMutation" or JSON payload...'
+                        data-testid="request-body-editor"
+                        style={{
+                          height: '250px',
+                          fontFamily: 'monospace',
+                          resize: 'vertical',
+                          fontSize: '1.2rem',
+                          boxSizing: 'border-box',
+                        }}
                       />
                     </div>
 
@@ -1116,7 +1233,7 @@ function ResponseOverridesApp({
                           padding: '4px 0',
                           fontSize: '1.1rem',
                         }}
-                        onClick={() => deleteOverride(override.id)}
+                        onClick={() => setDeleteTargetId(override.id)}
                       >
                         Delete
                       </button>
@@ -1128,6 +1245,17 @@ function ResponseOverridesApp({
           </ul>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTargetId}
+        title="Delete Response Mock"
+        message="Are you sure you want to delete this response mock override rule?"
+        onConfirm={() => {
+          deleteOverride(deleteTargetId);
+          setDeleteTargetId(null);
+        }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
     </div>
   );
 }

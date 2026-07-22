@@ -66,6 +66,82 @@ const RequestLogsView = ({
     }
   }, []);
 
+  const searchTermRef = useRef(searchTerm);
+  const methodFiltersRef = useRef(methodFilters);
+  const statusFiltersRef = useRef(statusFilters);
+  const typeFiltersRef = useRef(typeFilters);
+  const isLoadedRef = useRef(false);
+
+  useEffect(() => { searchTermRef.current = searchTerm; }, [searchTerm]);
+  useEffect(() => { methodFiltersRef.current = methodFilters; }, [methodFilters]);
+  useEffect(() => { statusFiltersRef.current = statusFilters; }, [statusFilters]);
+  useEffect(() => { typeFiltersRef.current = typeFilters; }, [typeFilters]);
+
+  useEffect(() => {
+    if (chrome.storage) {
+      chrome.storage.local.get([
+        'rho_logsSearchTerm',
+        'rho_logsMethodFilters',
+        'rho_logsStatusFilters',
+        'rho_logsTypeFilters'
+      ], (result) => {
+        if (result.rho_logsSearchTerm !== undefined) setSearchTerm(result.rho_logsSearchTerm);
+        if (result.rho_logsMethodFilters !== undefined) setMethodFilters(result.rho_logsMethodFilters);
+        if (result.rho_logsStatusFilters !== undefined) setStatusFilters(result.rho_logsStatusFilters);
+        if (result.rho_logsTypeFilters !== undefined) setTypeFilters(result.rho_logsTypeFilters);
+        
+        setTimeout(() => {
+          isLoadedRef.current = true;
+        }, 0);
+      });
+
+      const listener = (changes, namespace) => {
+        if (namespace === 'local') {
+          if (changes.rho_logsSearchTerm && changes.rho_logsSearchTerm.newValue !== searchTermRef.current) {
+            setSearchTerm(changes.rho_logsSearchTerm.newValue || '');
+          }
+          if (changes.rho_logsMethodFilters && JSON.stringify(changes.rho_logsMethodFilters.newValue) !== JSON.stringify(methodFiltersRef.current)) {
+            setMethodFilters(changes.rho_logsMethodFilters.newValue || []);
+          }
+          if (changes.rho_logsStatusFilters && JSON.stringify(changes.rho_logsStatusFilters.newValue) !== JSON.stringify(statusFiltersRef.current)) {
+            setStatusFilters(changes.rho_logsStatusFilters.newValue || []);
+          }
+          if (changes.rho_logsTypeFilters && JSON.stringify(changes.rho_logsTypeFilters.newValue) !== JSON.stringify(typeFiltersRef.current)) {
+            setTypeFilters(changes.rho_logsTypeFilters.newValue || []);
+          }
+        }
+      };
+      if (chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener(listener);
+        return () => chrome.storage.onChanged.removeListener(listener);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_logsSearchTerm: searchTerm });
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_logsMethodFilters: methodFilters });
+    }
+  }, [methodFilters]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_logsStatusFilters: statusFilters });
+    }
+  }, [statusFilters]);
+
+  useEffect(() => {
+    if (chrome.storage && isLoadedRef.current) {
+      chrome.storage.local.set({ rho_logsTypeFilters: typeFilters });
+    }
+  }, [typeFilters]);
+
   const clearLogs = () => {
     if (chrome.storage) {
       chrome.storage.local.set({ recentRequests: [] });

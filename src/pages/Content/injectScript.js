@@ -15,8 +15,10 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
   const _nativeCreateElement = document.createElement.bind(document);
 
   let responseOverrides = [];
+  let requestBodyOverrides = [];
   let requestCollectingEnabled = false;
   let responseOverridesEnabled = false;
+  let requestBodyOverridesEnabled = false;
 
   // Listen for updates from the content script
   window.addEventListener('message', (event) => {
@@ -24,9 +26,11 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
 
     if (event.data.type === 'REQUEST_HEADER_OVERRIDE_RESPONSE_MOCKS') {
       responseOverrides = event.data.overrides || [];
+      requestBodyOverrides = event.data.requestBodyOverrides || [];
       requestCollectingEnabled = event.data.requestCollectingEnabled === true;
       responseOverridesEnabled = event.data.responseOverridesEnabled === true;
-      updateActiveWorkersMocks(window, responseOverrides);
+      requestBodyOverridesEnabled = event.data.requestBodyOverridesEnabled === true;
+      updateActiveWorkersMocks(window, responseOverrides, requestBodyOverrides);
     }
   });
 
@@ -47,10 +51,42 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
-      let urlMatches = override.matchUrl ? url.includes(override.matchUrl) : true;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
       let bodyMatches = true;
-      if (override.matchRequestBody && method && method.toUpperCase() !== 'GET') {
-        bodyMatches = requestBody && typeof requestBody === 'string' && requestBody.includes(override.matchRequestBody);
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
+      }
+      return urlMatches && bodyMatches;
+    });
+  }
+
+  function getMatchedRequestBodyOverride(url, method, requestBody) {
+    if (!requestBodyOverridesEnabled) return null;
+    if (!url || typeof url !== 'string') return null;
+    return requestBodyOverrides.find((override) => {
+      if (!override.active) return false;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
+      let bodyMatches = true;
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
       }
       return urlMatches && bodyMatches;
     });
@@ -84,7 +120,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
   }
 
   // Helper to push mock updates to active workers
-  function updateActiveWorkersMocks(win, overrides) {
+  function updateActiveWorkersMocks(win, overrides, requestBodyOverrides) {
     if (win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__) {
       const active = [];
       win.__REQUEST_HEADER_OVERRIDE_ACTIVE_WORKERS__.forEach((ref) => {
@@ -95,6 +131,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             worker.postMessage({
               type: 'REQUEST_HEADER_OVERRIDE_UPDATE_MOCKS',
               overrides: overrides,
+              requestBodyOverrides: requestBodyOverrides,
+              requestBodyOverridesEnabled: requestBodyOverridesEnabled,
             });
           } catch (e) {}
         }
@@ -251,9 +289,12 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
 
             if (isJS && Array.isArray(parts)) {
               const serializedOverrides = JSON.stringify(responseOverrides);
+              const serializedBodyOverrides = JSON.stringify(requestBodyOverrides);
               const patchCode = `
               (function() {
                 let responseOverrides = ${serializedOverrides};
+                let requestBodyOverrides = ${serializedBodyOverrides};
+                let requestBodyOverridesEnabled = ${requestBodyOverridesEnabled};
                 
                 function logResponse(url, method, responseText, contentType, statusCode, requestHeaders, responseHeaders, requestBody, operationName) {
                   self.postMessage({
@@ -286,10 +327,42 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
-      let urlMatches = override.matchUrl ? url.includes(override.matchUrl) : true;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
       let bodyMatches = true;
-      if (override.matchRequestBody && method && method.toUpperCase() !== 'GET') {
-        bodyMatches = requestBody && typeof requestBody === 'string' && requestBody.includes(override.matchRequestBody);
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
+      }
+      return urlMatches && bodyMatches;
+    });
+  }
+
+  function getMatchedRequestBodyOverride(url, method, requestBody) {
+    if (!requestBodyOverridesEnabled) return null;
+    if (!url || typeof url !== 'string') return null;
+    return requestBodyOverrides.find((override) => {
+      if (!override.active) return false;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
+      let bodyMatches = true;
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
       }
       return urlMatches && bodyMatches;
     });
@@ -351,6 +424,34 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                         requestBody = String(body);
                       }
                     }
+
+                    const reqBodyOverride = getMatchedRequestBodyOverride(url, method, requestBody);
+                    if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                      requestBody = reqBodyOverride.overrideRequestBody;
+                      if (resource && (self.Request && resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                        const newInit = { ...args[1] };
+                        newInit.body = reqBodyOverride.overrideRequestBody;
+                        newInit.method = method;
+                        
+                        const newHeaders = new self.Headers(resource.headers);
+                        if (args[1] && args[1].headers) {
+                          const initHeaders = new self.Headers(args[1].headers);
+                          initHeaders.forEach((value, name) => newHeaders.set(name, value));
+                        }
+                        newInit.headers = newHeaders;
+                        
+                        args[0] = new self.Request(resource, newInit);
+                        if (args[1]) {
+                          delete args[1].body;
+                        }
+                      } else {
+                        if (!args[1]) {
+                          args[1] = {};
+                        }
+                        args[1].body = reqBodyOverride.overrideRequestBody;
+                      }
+                    }
+
                     const override = getMatchedOverride(url, method, requestBody);
 
                     if (override) {
@@ -461,6 +562,12 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       }
                     }
 
+                    const reqBodyOverride = getMatchedRequestBodyOverride(this._requestUrl, this._requestMethod, this._requestBody);
+                    if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                      this._requestBody = reqBodyOverride.overrideRequestBody;
+                      args[0] = reqBodyOverride.overrideRequestBody;
+                    }
+
                     const override = getMatchedOverride(this._requestUrl, this._requestMethod, this._requestBody);
                     if (override) {
                       Object.defineProperty(this, 'readyState', { value: 4, writable: false });
@@ -544,9 +651,12 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             let workerURL = absoluteURL;
 
             const serializedOverrides = JSON.stringify(responseOverrides);
+            const serializedBodyOverrides = JSON.stringify(requestBodyOverrides);
             const workerCode = `
             (function() {
               let responseOverrides = ${serializedOverrides};
+              let requestBodyOverrides = ${serializedBodyOverrides};
+              let requestBodyOverridesEnabled = ${requestBodyOverridesEnabled};
               
               function logResponse(url, method, responseText, contentType, statusCode, requestHeaders, responseHeaders, requestBody, operationName) {
                 self.postMessage({
@@ -579,10 +689,42 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
-      let urlMatches = override.matchUrl ? url.includes(override.matchUrl) : true;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
       let bodyMatches = true;
-      if (override.matchRequestBody && method && method.toUpperCase() !== 'GET') {
-        bodyMatches = requestBody && typeof requestBody === 'string' && requestBody.includes(override.matchRequestBody);
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
+      }
+      return urlMatches && bodyMatches;
+    });
+  }
+
+  function getMatchedRequestBodyOverride(url, method, requestBody) {
+    if (!requestBodyOverridesEnabled) return null;
+    if (!url || typeof url !== 'string') return null;
+    return requestBodyOverrides.find((override) => {
+      if (!override.active) return false;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
+      let bodyMatches = true;
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
       }
       return urlMatches && bodyMatches;
     });
@@ -644,6 +786,34 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                         requestBody = String(body);
                       }
                     }
+
+                    const reqBodyOverride = getMatchedRequestBodyOverride(url, method, requestBody);
+                    if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                      requestBody = reqBodyOverride.overrideRequestBody;
+                      if (resource && (self.Request && resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                        const newInit = { ...args[1] };
+                        newInit.body = reqBodyOverride.overrideRequestBody;
+                        newInit.method = method;
+                        
+                        const newHeaders = new self.Headers(resource.headers);
+                        if (args[1] && args[1].headers) {
+                          const initHeaders = new self.Headers(args[1].headers);
+                          initHeaders.forEach((value, name) => newHeaders.set(name, value));
+                        }
+                        newInit.headers = newHeaders;
+                        
+                        args[0] = new self.Request(resource, newInit);
+                        if (args[1]) {
+                          delete args[1].body;
+                        }
+                      } else {
+                        if (!args[1]) {
+                          args[1] = {};
+                        }
+                        args[1].body = reqBodyOverride.overrideRequestBody;
+                      }
+                    }
+
                     const override = getMatchedOverride(url, method, requestBody);
 
                     if (override) {
@@ -753,6 +923,12 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                       } else {
                         this._requestBody = String(body);
                       }
+                    }
+
+                    const reqBodyOverride = getMatchedRequestBodyOverride(this._requestUrl, this._requestMethod, this._requestBody);
+                    if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                      this._requestBody = reqBodyOverride.overrideRequestBody;
+                      args[0] = reqBodyOverride.overrideRequestBody;
                     }
 
                     const override = getMatchedOverride(this._requestUrl, this._requestMethod, this._requestBody);
@@ -905,6 +1081,7 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             const isData = absoluteURL.startsWith('data:');
 
             const serializedOverrides = JSON.stringify(responseOverrides);
+            const serializedBodyOverrides = JSON.stringify(requestBodyOverrides);
 
             if (isBlob || isData) {
               let originalCode = null;
@@ -919,6 +1096,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                 const patchCode = `
                 (function() {
                   let responseOverrides = ${serializedOverrides};
+                  let requestBodyOverrides = ${serializedBodyOverrides};
+                  let requestBodyOverridesEnabled = ${requestBodyOverridesEnabled};
                   
                   function logResponse(url, method, responseText, contentType, statusCode, requestHeaders, responseHeaders, requestBody, operationName) {
                     broadcastLog({
@@ -955,6 +1134,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     port.addEventListener('message', (event) => {
                       if (event.data && event.data.type === 'REQUEST_HEADER_OVERRIDE_UPDATE_MOCKS') {
                         responseOverrides = event.data.overrides || [];
+                        requestBodyOverrides = event.data.requestBodyOverrides || [];
+                        requestBodyOverridesEnabled = event.data.requestBodyOverridesEnabled === true;
                       }
                     });
                     port.start();
@@ -972,10 +1153,42 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
-      let urlMatches = override.matchUrl ? url.includes(override.matchUrl) : true;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
       let bodyMatches = true;
-      if (override.matchRequestBody && method && method.toUpperCase() !== 'GET') {
-        bodyMatches = requestBody && typeof requestBody === 'string' && requestBody.includes(override.matchRequestBody);
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
+      }
+      return urlMatches && bodyMatches;
+    });
+  }
+
+  function getMatchedRequestBodyOverride(url, method, requestBody) {
+    if (!requestBodyOverridesEnabled) return null;
+    if (!url || typeof url !== 'string') return null;
+    return requestBodyOverrides.find((override) => {
+      if (!override.active) return false;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
+      let bodyMatches = true;
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
       }
       return urlMatches && bodyMatches;
     });
@@ -1037,6 +1250,34 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                           requestBody = String(body);
                         }
                       }
+
+                      const reqBodyOverride = getMatchedRequestBodyOverride(url, method, requestBody);
+                      if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                        requestBody = reqBodyOverride.overrideRequestBody;
+                        if (resource && (self.Request && resource instanceof self.Request || (resource.constructor && resource.constructor.name === 'Request'))) {
+                          const newInit = { ...args[1] };
+                          newInit.body = reqBodyOverride.overrideRequestBody;
+                          newInit.method = method;
+                          
+                          const newHeaders = new self.Headers(resource.headers);
+                          if (args[1] && args[1].headers) {
+                            const initHeaders = new self.Headers(args[1].headers);
+                            initHeaders.forEach((value, name) => newHeaders.set(name, value));
+                          }
+                          newInit.headers = newHeaders;
+                          
+                          args[0] = new self.Request(resource, newInit);
+                          if (args[1]) {
+                            delete args[1].body;
+                          }
+                        } else {
+                          if (!args[1]) {
+                            args[1] = {};
+                          }
+                          args[1].body = reqBodyOverride.overrideRequestBody;
+                        }
+                      }
+
                       const override = getMatchedOverride(url, method, requestBody);
 
                       if (override) {
@@ -1174,6 +1415,12 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                         } else {
                           this._requestBody = String(body);
                         }
+                      }
+
+                      const reqBodyOverride = getMatchedRequestBodyOverride(this._requestUrl, this._requestMethod, this._requestBody);
+                      if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                        this._requestBody = reqBodyOverride.overrideRequestBody;
+                        args[0] = reqBodyOverride.overrideRequestBody;
                       }
 
                       const override = getMatchedOverride(this._requestUrl, this._requestMethod, this._requestBody);
@@ -1594,10 +1841,19 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
     if (!url || typeof url !== 'string') return null;
     return responseOverrides.find((override) => {
       if (!override.active) return false;
-      let urlMatches = override.matchUrl ? url.includes(override.matchUrl) : true;
+      const hasUrlPattern = override.matchUrl && override.matchUrl.trim() !== '';
+      const hasBodyPattern = override.matchRequestBody && override.matchRequestBody.trim() !== '';
+      if (!hasUrlPattern && !hasBodyPattern) return false;
+
+      let urlMatches = hasUrlPattern ? url.includes(override.matchUrl) : true;
       let bodyMatches = true;
-      if (override.matchRequestBody && method && method.toUpperCase() !== 'GET') {
-        bodyMatches = requestBody && typeof requestBody === 'string' && requestBody.includes(override.matchRequestBody);
+      if (hasBodyPattern && method && method.toUpperCase() !== 'GET') {
+        bodyMatches = false;
+        if (requestBody && typeof requestBody === 'string') {
+          const cleanActual = requestBody.replace(/\\s+/g, '');
+          const cleanExpected = override.matchRequestBody.replace(/\\s+/g, '');
+          bodyMatches = cleanActual.includes(cleanExpected);
+        }
       }
       return urlMatches && bodyMatches;
     });
@@ -1991,6 +2247,34 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
               requestBody = String(body);
             }
           }
+
+          const reqBodyOverride = getMatchedRequestBodyOverride(url, method, requestBody);
+          if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+            requestBody = reqBodyOverride.overrideRequestBody;
+            if (resource && ((win.Request && resource instanceof win.Request) || (resource.constructor && resource.constructor.name === 'Request'))) {
+              const newInit = { ...args[1] };
+              newInit.body = reqBodyOverride.overrideRequestBody;
+              newInit.method = method;
+              
+              const newHeaders = new win.Headers(resource.headers);
+              if (args[1] && args[1].headers) {
+                const initHeaders = new win.Headers(args[1].headers);
+                initHeaders.forEach((value, name) => newHeaders.set(name, value));
+              }
+              newInit.headers = newHeaders;
+              
+              args[0] = new win.Request(resource, newInit);
+              if (args[1]) {
+                delete args[1].body;
+              }
+            } else {
+              if (!args[1]) {
+                args[1] = {};
+              }
+              args[1].body = reqBodyOverride.overrideRequestBody;
+            }
+          }
+
           const override = getMatchedOverride(url, method, requestBody);
 
           if (override) {
@@ -2195,6 +2479,11 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                 } else {
                   this._requestBody = String(body);
                 }
+              }
+              const reqBodyOverride = getMatchedRequestBodyOverride(this._requestUrl, this._requestMethod, this._requestBody);
+              if (reqBodyOverride && reqBodyOverride.overrideRequestBody) {
+                this._requestBody = reqBodyOverride.overrideRequestBody;
+                args[0] = reqBodyOverride.overrideRequestBody;
               }
 
               const override = getMatchedOverride(this._requestUrl, this._requestMethod, this._requestBody);

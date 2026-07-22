@@ -1,24 +1,31 @@
 let requestCollectingEnabled = false;
 
 // Helper to push overrides to the injected script
-const updateInjectedMocks = (overrides) => {
+const updateInjectedMocks = () => {
   try {
     if (chrome && chrome.runtime && chrome.runtime.id) {
-      chrome.storage.local.get(['requestCollectingEnabled', 'responseOverridesEnabled'], (result) => {
+      chrome.storage.local.get([
+        'requestCollectingEnabled',
+        'responseOverridesEnabled',
+        'requestBodyOverridesEnabled',
+        'responseOverrides',
+        'requestBodyOverrides'
+      ], (result) => {
         try {
           if (!chrome.runtime || !chrome.runtime.id) return;
           const collecting = result.requestCollectingEnabled === true;
           const overridesEnabled = result.responseOverridesEnabled === true;
+          const bodyOverridesEnabled = result.requestBodyOverridesEnabled === true;
           requestCollectingEnabled = collecting;
-
-
 
           window.postMessage(
             {
               type: 'REQUEST_HEADER_OVERRIDE_RESPONSE_MOCKS',
-              overrides: overridesEnabled ? (overrides || []) : [],
+              overrides: overridesEnabled ? (result.responseOverrides || []) : [],
+              requestBodyOverrides: bodyOverridesEnabled ? (result.requestBodyOverrides || []) : [],
               requestCollectingEnabled: collecting,
               responseOverridesEnabled: overridesEnabled,
+              requestBodyOverridesEnabled: bodyOverridesEnabled,
             },
             '*'
           );
@@ -35,10 +42,14 @@ try {
       try {
         if (!chrome.runtime || !chrome.runtime.id) return;
         if (namespace === 'local') {
-          if (changes.responseOverrides || changes.requestCollectingEnabled || changes.responseOverridesEnabled) {
-            chrome.storage.local.get(['responseOverrides'], (result) => {
-              updateInjectedMocks(result.responseOverrides || []);
-            });
+          if (
+            changes.responseOverrides ||
+            changes.requestBodyOverrides ||
+            changes.requestCollectingEnabled ||
+            changes.responseOverridesEnabled ||
+            changes.requestBodyOverridesEnabled
+          ) {
+            updateInjectedMocks();
           }
         }
       } catch (e) {
@@ -185,16 +196,7 @@ const handleMessage = (event) => {
   if (event.data.type === 'REQUEST_HEADER_OVERRIDE_LOG_REQUEST') {
     forwardLogToBackground(event.data);
   } else if (event.data.type === 'REQUEST_HEADER_OVERRIDE_INJECTED_READY') {
-    try {
-      if (chrome && chrome.runtime && chrome.runtime.id) {
-        chrome.storage.local.get(['responseOverrides'], (result) => {
-          try {
-            if (!chrome.runtime || !chrome.runtime.id) return;
-            updateInjectedMocks(result.responseOverrides || []);
-          } catch (e) {}
-        });
-      }
-    } catch (e) {}
+    updateInjectedMocks();
   }
 };
 
@@ -203,14 +205,7 @@ window.addEventListener('message', handleMessage);
 // Initial load - send overrides to injected script
 try {
   if (chrome && chrome.runtime && chrome.runtime.id) {
-    chrome.storage.local.get(['responseOverrides'], (result) => {
-      try {
-        if (!chrome.runtime || !chrome.runtime.id) return;
-        updateInjectedMocks(result.responseOverrides || []);
-      } catch (e) {
-        // Handle invalidated context
-      }
-    });
+    updateInjectedMocks();
   }
 } catch (e) {
   // Handle invalidated context gracefully

@@ -8,9 +8,9 @@ jest.mock('./JsonEditor', () => {
   return function MockJsonEditor({ value, onChange }) {
     return (
       <div data-testid="json-editor">
-        <textarea 
+        <textarea
           data-testid="json-editor-textarea"
-          value={value} 
+          value={value}
           onChange={(e) => onChange(e.target.value)}
         />
       </div>
@@ -81,7 +81,7 @@ describe('InspectorPanel Component', () => {
 
   test('renders correctly with selected request', async () => {
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
-    
+
     expect(screen.getByText('200')).toBeInTheDocument();
     expect(screen.getByText('https://example.com/api/test?q=1')).toBeInTheDocument();
     expect(screen.getByText('Headers')).toBeInTheDocument();
@@ -91,14 +91,14 @@ describe('InspectorPanel Component', () => {
 
   test('switches tabs correctly', () => {
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
-    
+
     // Initially payload tab is active
     expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
-    
+
     // Switch to Request Body
     fireEvent.click(screen.getByText('Request'));
-    expect(screen.getByTestId('json-editor')).toBeInTheDocument();
-    
+    expect(screen.getByTestId('inspector-request-body-editor')).toBeInTheDocument();
+
     // Switch to Headers
     fireEvent.click(screen.getByText('Headers'));
     expect(screen.getByText('Request Headers')).toBeInTheDocument();
@@ -111,7 +111,7 @@ describe('InspectorPanel Component', () => {
   test('displays mock status if URL is matched', async () => {
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
     fireEvent.click(screen.getByText('Payload'));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
     });
@@ -120,32 +120,32 @@ describe('InspectorPanel Component', () => {
   test('saves mock correctly when Save Mock button is clicked', async () => {
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
     fireEvent.click(screen.getByText('Payload'));
-    
+
     // Edit response in mock JSON editor
     await waitFor(() => {
       expect(screen.getAllByTestId('json-editor-textarea')[0]).toBeInTheDocument();
     });
     const textarea = screen.getAllByTestId('json-editor-textarea')[0];
     fireEvent.change(textarea, { target: { value: '{"new":"mock"}' } });
-    
+
     // Click Save
     const saveBtn = screen.getByText('Update Mock Response');
     fireEvent.click(saveBtn);
-    
+
     await waitFor(() => {
       expect(chrome.storage.local.set).toHaveBeenCalled();
     });
-    
+
     // Check saved state text
     expect(screen.getByText('Saved Successfully! ✓')).toBeInTheDocument();
-    
+
     // Trigger save again quickly to cover clearTimeout
     fireEvent.click(saveBtn);
-    
+
     act(() => {
       jest.advanceTimersByTime(2000);
     });
-    
+
     expect(screen.queryByText('Saved Successfully! ✓')).not.toBeInTheDocument();
     expect(screen.getByText('Update Mock Response')).toBeInTheDocument();
   });
@@ -153,41 +153,100 @@ describe('InspectorPanel Component', () => {
   test('saves new mock if no match exists', async () => {
     const newRequest = { ...mockSelectedRequest, url: 'https://example.com/api/new' };
     render(<InspectorPanel selectedRequest={newRequest} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Payload'));
-    
+
     await waitFor(() => {
       expect(screen.getAllByTestId('json-editor-textarea')[0]).toBeInTheDocument();
     });
     const textarea = screen.getAllByTestId('json-editor-textarea')[0];
     fireEvent.change(textarea, { target: { value: '{"fresh":"mock"}' } });
-    
+
     fireEvent.click(screen.getByText('Mock this Response'));
-    
+
     await waitFor(() => {
       expect(chrome.storage.local.set).toHaveBeenCalled();
     });
-    
+
     const setCallArgs = chrome.storage.local.set.mock.calls[0][0];
     expect(setCallArgs.responseOverrides.length).toBe(2);
     expect(setCallArgs.responseOverrides[0].matchUrl).toBe('/api/new');
   });
 
-  test('removes mock correctly by id', async () => {
-    render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
+  test('saves new mock for POST and GraphQL requests with correct matchRequestBody', async () => {
+    const postRequest = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/api/post-new',
+      method: 'POST',
+      requestBody: '{"x":1}',
+      response: '{"res":"post"}',
+    };
+
+    const { unmount } = render(<InspectorPanel selectedRequest={postRequest} onClose={jest.fn()} />);
     fireEvent.click(screen.getByText('Payload'));
-    
+
     await waitFor(() => {
-      expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
+      expect(screen.getAllByTestId('json-editor-textarea')[0]).toBeInTheDocument();
     });
-    
-    const removeBtn = screen.getByText('Delete Mock');
-    fireEvent.click(removeBtn);
-    
+    fireEvent.click(screen.getByText('Mock this Response'));
+
     await waitFor(() => {
       expect(chrome.storage.local.set).toHaveBeenCalled();
     });
-    
+
+    let setCallArgs = chrome.storage.local.set.mock.calls[0][0];
+    expect(setCallArgs.responseOverrides[0].matchUrl).toBe('/api/post-new');
+    expect(setCallArgs.responseOverrides[0].matchRequestBody).toBe('{"x":1}');
+
+    unmount();
+    jest.clearAllMocks();
+
+    const graphqlRequest = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/graphql',
+      method: 'POST',
+      requestBody: '{"operationName":"GetData"}',
+      operationName: 'GetData',
+      response: '{"data":{}}',
+    };
+
+    render(<InspectorPanel selectedRequest={graphqlRequest} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByText('Payload'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('json-editor-textarea')[0]).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Mock this Response'));
+
+    await waitFor(() => {
+      expect(chrome.storage.local.set).toHaveBeenCalled();
+    });
+
+    setCallArgs = chrome.storage.local.set.mock.calls[0][0];
+    expect(setCallArgs.responseOverrides[0].matchUrl).toBe('/graphql');
+    expect(setCallArgs.responseOverrides[0].matchRequestBody).toBe('{"operationName":"GetData"}');
+  });
+
+  test('removes mock correctly by id', async () => {
+    render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByText('Payload'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
+    });
+
+    const removeBtn = screen.getByText('Delete Mock');
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+    await waitFor(() => {
+      expect(chrome.storage.local.set).toHaveBeenCalled();
+    });
+
     const setCallArgs = chrome.storage.local.set.mock.calls[0][0];
     expect(setCallArgs.responseOverrides.length).toBe(0);
   });
@@ -197,21 +256,26 @@ describe('InspectorPanel Component', () => {
     global.chrome.storage.local.get.mockImplementationOnce((keys, cb) => {
       cb({ responseOverrides: [{ matchUrl: '/api/test?q=1', mockResponse: '{}' }] });
     });
-    
+
     render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
     fireEvent.click(screen.getByText('Payload'));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
     });
-    
+
     const removeBtn = screen.getByText('Delete Mock');
     fireEvent.click(removeBtn);
-    
+
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
     await waitFor(() => {
       expect(chrome.storage.local.set).toHaveBeenCalled();
     });
-    
+
     // The set should be called with an empty array because it matches by matchUrl
     const setCallArgs = chrome.storage.local.set.mock.calls[0][0];
     expect(setCallArgs.responseOverrides.length).toBe(0);
@@ -220,10 +284,10 @@ describe('InspectorPanel Component', () => {
   test('calls onClose when close button is clicked', () => {
     const handleClose = jest.fn();
     const { container } = render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={handleClose} />);
-    
+
     const closeBtn = container.querySelector('.btn-link');
     fireEvent.click(closeBtn);
-    
+
     expect(handleClose).toHaveBeenCalled();
   });
 
@@ -236,7 +300,7 @@ describe('InspectorPanel Component', () => {
   test('handles case where no headers are provided', () => {
     const req = { ...mockSelectedRequest, requestHeaders: null, responseHeaders: null };
     render(<InspectorPanel selectedRequest={req} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Headers'));
     expect(screen.getByText('Request Headers')).toBeInTheDocument();
     expect(screen.getByText('No request headers recorded')).toBeInTheDocument();
@@ -251,12 +315,12 @@ describe('InspectorPanel Component', () => {
       response: 'some plain text'
     };
     render(<InspectorPanel selectedRequest={plainTextReq} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Payload'));
-    
+
     const textarea = screen.getByPlaceholderText('Response body text...');
     fireEvent.change(textarea, { target: { value: 'plain text' } });
-    
+
     expect(textarea).toHaveValue('plain text');
   });
 
@@ -267,7 +331,7 @@ describe('InspectorPanel Component', () => {
       response: '{"invalid json'
     };
     render(<InspectorPanel selectedRequest={invalidJsonResReq} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Payload'));
     const textarea = screen.getByDisplayValue('{"invalid json');
     expect(textarea).toBeInTheDocument();
@@ -281,7 +345,7 @@ describe('InspectorPanel Component', () => {
       response: '{"detected": true}'
     };
     render(<InspectorPanel selectedRequest={jsonWithoutHeaderReq} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Payload'));
     expect(screen.getByTestId('json-editor')).toBeInTheDocument();
   });
@@ -289,9 +353,9 @@ describe('InspectorPanel Component', () => {
   test('handles invalid json request body', () => {
     const invalidJsonReq = { ...mockSelectedRequest, requestBody: '{"invalid"' };
     render(<InspectorPanel selectedRequest={invalidJsonReq} onClose={jest.fn()} />);
-    
+
     fireEvent.click(screen.getByText('Request'));
-    
+
     // Fallbacks to plain textarea for invalid json
     const textarea = screen.getByDisplayValue('{"invalid"');
     expect(textarea).toBeInTheDocument();
@@ -300,21 +364,21 @@ describe('InspectorPanel Component', () => {
   test('clears active save status timeout when selectedRequest changes', async () => {
     const { rerender } = render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
     fireEvent.click(screen.getByText('Payload'));
-    
+
     await waitFor(() => {
       expect(screen.getAllByTestId('json-editor-textarea')[0]).toBeInTheDocument();
     });
-    
+
     const saveBtn = screen.getByText('Update Mock Response');
     fireEvent.click(saveBtn);
-    
+
     await waitFor(() => {
       expect(screen.getByText('Saved Successfully! ✓')).toBeInTheDocument();
     });
-    
+
     const anotherReq = { ...mockSelectedRequest, url: 'https://example.com/api/different' };
     rerender(<InspectorPanel selectedRequest={anotherReq} onClose={jest.fn()} />);
-    
+
     act(() => {
       jest.advanceTimersByTime(2000);
     });
@@ -334,19 +398,19 @@ describe('InspectorPanel Component', () => {
     };
 
     const { rerender } = render(
-      <InspectorPanel 
-        selectedRequest={null} 
-        onClose={jest.fn()} 
-        isFullScreen={true} 
+      <InspectorPanel
+        selectedRequest={null}
+        onClose={jest.fn()}
+        isFullScreen={true}
       />
     );
     expect(screen.getByText('No Request Selected')).toBeInTheDocument();
 
     rerender(
-      <InspectorPanel 
-        selectedRequest={edgeCaseReq} 
-        onClose={jest.fn()} 
-        isFullScreen={true} 
+      <InspectorPanel
+        selectedRequest={edgeCaseReq}
+        onClose={jest.fn()}
+        isFullScreen={true}
       />
     );
 
@@ -376,19 +440,19 @@ describe('InspectorPanel Component', () => {
     window.chrome.storage = undefined;
 
     rerender(
-      <InspectorPanel 
-        selectedRequest={mockSelectedRequest} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={mockSelectedRequest}
+        onClose={jest.fn()}
       />
     );
-    
+
     const deleteBtn = screen.getByText('Delete Mock');
     fireEvent.click(deleteBtn);
-    
+
     rerender(
-      <InspectorPanel 
-        selectedRequest={edgeCaseReq} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={edgeCaseReq}
+        onClose={jest.fn()}
       />
     );
     const mockBtn = screen.getByText('Update Mock Response');
@@ -399,37 +463,37 @@ describe('InspectorPanel Component', () => {
 
     // Rerender with statusCode >= 400 (covers line 230 branch)
     rerender(
-      <InspectorPanel 
-        selectedRequest={{ ...edgeCaseReq, statusCode: 400 }} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={{ ...edgeCaseReq, statusCode: 400 }}
+        onClose={jest.fn()}
       />
     );
     expect(screen.getByText('400')).toBeInTheDocument();
 
     // Rerender with statusCode = null (covers line 235 PENDING branch)
     rerender(
-      <InspectorPanel 
-        selectedRequest={{ ...edgeCaseReq, statusCode: null }} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={{ ...edgeCaseReq, statusCode: null }}
+        onClose={jest.fn()}
       />
     );
     expect(screen.getByText('PENDING')).toBeInTheDocument();
 
     // Rerender with requestBody starting with '[' (covers lines 446-448 branch)
     rerender(
-      <InspectorPanel 
-        selectedRequest={{ ...edgeCaseReq, requestBody: '[{"a":1}]' }} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={{ ...edgeCaseReq, requestBody: '[{"a":1}]' }}
+        onClose={jest.fn()}
       />
     );
     fireEvent.click(screen.getByText('Request'));
-    expect(screen.getByTestId('json-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('inspector-request-body-editor')).toBeInTheDocument();
 
     // Rerender with no requestBody (covers line 488 branch)
     rerender(
-      <InspectorPanel 
-        selectedRequest={{ ...edgeCaseReq, requestBody: null }} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={{ ...edgeCaseReq, requestBody: null }}
+        onClose={jest.fn()}
       />
     );
   });
@@ -439,7 +503,7 @@ describe('InspectorPanel Component', () => {
       matchUrl: '/api/post-test',
       mockResponse: '{"mocked":"true"}'
     };
-    
+
     global.chrome.storage.local.get.mockImplementation((keys, cb) => {
       cb({ responseOverrides: [overrideWithoutIdPost] });
     });
@@ -457,9 +521,9 @@ describe('InspectorPanel Component', () => {
     };
 
     const { rerender } = render(
-      <InspectorPanel 
-        selectedRequest={validPostReq} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={validPostReq}
+        onClose={jest.fn()}
       />
     );
 
@@ -472,11 +536,16 @@ describe('InspectorPanel Component', () => {
     const deleteBtnPost = screen.getByText('Delete Mock');
     fireEvent.click(deleteBtnPost);
 
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
     const overrideWithoutIdInvalid = {
       matchUrl: 'invalid-url',
       mockResponse: '{"mocked":"true"}'
     };
-    
+
     global.chrome.storage.local.get.mockImplementation((keys, cb) => {
       cb({ responseOverrides: [overrideWithoutIdInvalid] });
     });
@@ -494,9 +563,9 @@ describe('InspectorPanel Component', () => {
     };
 
     rerender(
-      <InspectorPanel 
-        selectedRequest={badUrlReq} 
-        onClose={jest.fn()} 
+      <InspectorPanel
+        selectedRequest={badUrlReq}
+        onClose={jest.fn()}
       />
     );
 
@@ -510,7 +579,71 @@ describe('InspectorPanel Component', () => {
     fireEvent.click(deleteBtnInvalid);
 
     await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+    await waitFor(() => {
       expect(global.chrome.storage.local.set).toHaveBeenCalled();
+    });
+  });
+
+  test('allows editing request body match pattern and saves it correctly', async () => {
+    const postRequest = {
+      ...mockSelectedRequest,
+      url: 'https://example.com/api/post-edit-pattern',
+      method: 'POST',
+      requestBody: '{"initial":true}',
+      response: '{}',
+    };
+    render(<InspectorPanel selectedRequest={postRequest} onClose={jest.fn()} />);
+
+    fireEvent.click(screen.getByText('Request'));
+    const textarea = screen.getByTestId('inspector-request-body-editor');
+    expect(textarea).toHaveValue('{"initial":true}');
+
+    // Edit the pattern
+    fireEvent.change(textarea, { target: { value: '{"edited":true}' } });
+
+    // Save
+    fireEvent.click(screen.getByText('Mock this Response'));
+
+    await waitFor(() => {
+      expect(chrome.storage.local.set).toHaveBeenCalled();
+    });
+
+    const setCallArgs = chrome.storage.local.set.mock.calls[0][0];
+    expect(setCallArgs.responseOverrides[0].matchRequestBody).toBe('{"edited":true}');
+  });
+
+  test('cancels mock deletion', async () => {
+    render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByText('Payload'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Mock Active/i)).toBeInTheDocument();
+    });
+
+    const removeBtn = screen.getByText('Delete Mock');
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-modal-cancel')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+
+    expect(chrome.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  test('handles storage change for overrides', async () => {
+    render(<InspectorPanel selectedRequest={mockSelectedRequest} onClose={jest.fn()} />);
+
+    act(() => {
+      listeners.forEach(l => l({ responseOverrides: { newValue: [] } }, 'local'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Mock Active/i)).not.toBeInTheDocument();
     });
   });
 });

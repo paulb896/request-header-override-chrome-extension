@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import JsonEditor from './JsonEditor';
+import ConfirmModal from './ConfirmModal';
 
 const formatJsonString = (str) => {
   if (!str) return '';
@@ -8,44 +9,73 @@ const formatJsonString = (str) => {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       return JSON.stringify(JSON.parse(trimmed), null, 2);
     }
-  } catch (e) {}
+  } catch (e) { }
   return str;
 };
 
 const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
   const [activeTab, setActiveTab] = useState('payload');
+  const [saveStatus, setSaveStatus] = useState('');
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [editedResponse, setEditedResponse] = useState('');
-  const [isMocked, setIsMocked] = useState(false);
   const [matchedOverrideId, setMatchedOverrideId] = useState(null);
-  const [saveStatus, setSaveStatus] = useState('idle');
-  const timeoutRef = useRef(null);
+  const [customMatchRequestBody, setCustomMatchRequestBody] = useState('');
+  const [isMocked, setIsMocked] = useState(false);
+  const saveTimeoutRef = useRef(null);
 
-  const isJsonResponse = (() => {
-    if (!selectedRequest) return false;
-    if (
-      selectedRequest.contentType &&
-      selectedRequest.contentType.toLowerCase().includes('json')
-    ) {
-      return true;
+  const isJsonResponse =
+    Boolean(selectedRequest && selectedRequest.contentType && selectedRequest.contentType.includes('json')) ||
+    Boolean(editedResponse && (editedResponse.trim().startsWith('{') || editedResponse.trim().startsWith('[')));
+
+  useEffect(() => {
+    if (chrome && chrome.storage && chrome.storage.onChanged) {
+      const handleStorageChange = (changes, areaName) => {
+        if (areaName === 'local' && changes.responseOverrides) {
+          const overrides = changes.responseOverrides.newValue || [];
+          if (selectedRequest) {
+            let matchUrl = selectedRequest.url;
+            try {
+              const parsed = new URL(selectedRequest.url);
+              matchUrl = parsed.pathname + (selectedRequest.method === 'GET' ? parsed.search : '');
+            } catch (e) { }
+
+            const matched = overrides.find(
+              (o) =>
+                o.matchUrl &&
+                (selectedRequest.url.includes(o.matchUrl) ||
+                  matchUrl.includes(o.matchUrl))
+            );
+            setIsMocked(!!matched);
+            if (matched) {
+              setMatchedOverrideId(matched.id || null);
+            } else {
+              setMatchedOverrideId(null);
+            }
+          }
+        }
+      };
+
+      chrome.storage.onChanged.addListener(handleStorageChange);
+      return () => {
+        if (chrome && chrome.storage && chrome.storage.onChanged) {
+          chrome.storage.onChanged.removeListener(handleStorageChange);
+        }
+      };
     }
-    try {
-      const trimmed = (selectedRequest.response || '').trim();
-      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        JSON.parse(trimmed);
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  })();
+  }, [selectedRequest]);
 
   useEffect(() => {
     if (selectedRequest) {
       setEditedResponse(formatJsonString(selectedRequest.response || ''));
       setMatchedOverrideId(null);
       setSaveStatus('idle');
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
+
+      let initialBody = selectedRequest.requestBody || '';
+      setCustomMatchRequestBody(initialBody);
+
       if (chrome.storage) {
         chrome.storage.local.get(['responseOverrides'], (result) => {
           const overrides = result.responseOverrides || [];
@@ -53,7 +83,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
           try {
             const parsed = new URL(selectedRequest.url);
             matchUrl = parsed.pathname + (selectedRequest.method === 'GET' ? parsed.search : '');
-          } catch (e) {}
+          } catch (e) { }
 
           const matched = overrides.find(
             (o) =>
@@ -65,6 +95,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
           if (matched) {
             setMatchedOverrideId(matched.id);
             setEditedResponse(formatJsonString(matched.mockResponse));
+            setCustomMatchRequestBody(matched.matchRequestBody !== undefined && matched.matchRequestBody !== null ? matched.matchRequestBody : initialBody);
           }
         });
       }
@@ -73,8 +104,8 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
     };
   }, []);
@@ -88,7 +119,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
       try {
         const parsed = new URL(selectedRequest.url);
         matchUrl = parsed.pathname + (selectedRequest.method === 'GET' ? parsed.search : '');
-      } catch (e) {}
+      } catch (e) { }
 
       // Find by ID first, then fallback to matchUrl
       let existingIdx = -1;
@@ -105,7 +136,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
             ? overrides[existingIdx].id
             : matchedOverrideId || Math.random().toString(36).substring(2, 9),
         matchUrl: existingIdx >= 0 ? overrides[existingIdx].matchUrl : matchUrl,
-        matchRequestBody: existingIdx >= 0 ? overrides[existingIdx].matchRequestBody : '',
+        matchRequestBody: customMatchRequestBody.trim(),
         mockResponse: editedResponse,
         status: 200,
         statusText: 'OK',
@@ -125,10 +156,10 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
         setIsMocked(true);
         setMatchedOverrideId(newOverride.id);
         setSaveStatus('saved');
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
         }
-        timeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = setTimeout(() => {
           setSaveStatus('idle');
         }, 1500);
       });
@@ -149,7 +180,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
         try {
           const parsed = new URL(selectedRequest.url);
           matchUrl = parsed.pathname + (selectedRequest.method === 'GET' ? parsed.search : '');
-        } catch (e) {}
+        } catch (e) { }
         newOverrides = overrides.filter((o) => o.matchUrl !== matchUrl);
       }
 
@@ -286,24 +317,24 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
             fontSize: '1.15rem',
             ...(saveStatus === 'saved'
               ? {
-                  background:
-                    'linear-gradient(135deg, var(--color-emerald) 0%, #059669 100%)',
-                  boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
-                  borderColor: 'var(--color-emerald)',
-                }
+                background:
+                  'linear-gradient(135deg, var(--color-emerald) 0%, #059669 100%)',
+                boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
+                borderColor: 'var(--color-emerald)',
+              }
               : {}),
           }}
         >
           {saveStatus === 'saved'
             ? 'Saved Successfully! ✓'
             : isMocked
-            ? 'Update Mock Response'
-            : 'Mock this Response'}
+              ? 'Update Mock Response'
+              : 'Mock this Response'}
         </button>
         {isMocked && (
           <button
             className="btn btn-secondary"
-            onClick={handleRemoveMock}
+            onClick={() => setShowConfirmDelete(true)}
             style={{
               padding: '8px 12px',
               fontSize: '1.15rem',
@@ -329,7 +360,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
           Headers
         </label>
 
-        {selectedRequest.requestBody && (
+        {(selectedRequest.requestBody || (selectedRequest.method && selectedRequest.method.toUpperCase() !== 'GET')) && (
           <>
             <input
               type="radio"
@@ -372,7 +403,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
               Request Headers
             </div>
             {selectedRequest.requestHeaders &&
-            selectedRequest.requestHeaders.length > 0 ? (
+              selectedRequest.requestHeaders.length > 0 ? (
               <div className="code-container">
                 <pre
                   className="code-content custom-scroll"
@@ -408,7 +439,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
               Response Headers
             </div>
             {selectedRequest.responseHeaders &&
-            selectedRequest.responseHeaders.length > 0 ? (
+              selectedRequest.responseHeaders.length > 0 ? (
               <div className="code-container">
                 <pre
                   className="code-content custom-scroll"
@@ -457,7 +488,7 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
                 fontWeight: 500,
               }}
             >
-              Request Body
+              Request Body Match Pattern (Editable)
             </span>
           </div>
 
@@ -472,54 +503,35 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
               flexDirection: 'column',
             }}
           >
-            {selectedRequest.requestBody &&
-            (selectedRequest.requestBody.trim().startsWith('{') ||
-              selectedRequest.requestBody.trim().startsWith('[')) ? (
-              <JsonEditor
-                value={(() => {
-                  try {
-                    return JSON.stringify(
-                      JSON.parse(selectedRequest.requestBody),
-                      null,
-                      2
-                    );
-                  } catch (e) {
-                    return selectedRequest.requestBody;
-                  }
-                })()}
-                readOnly={true}
-              />
-            ) : (
-              <div
+            <div
+              style={{
+                flex: 1,
+                padding: '10px',
+                background: 'var(--bg-overlay)',
+                overflow: 'auto',
+                display: 'flex',
+              }}
+              className="custom-scroll"
+            >
+              <textarea
+                className="form-control"
                 style={{
                   flex: 1,
-                  padding: '10px',
-                  background: 'var(--bg-overlay)',
-                  overflow: 'auto',
-                  display: 'flex',
+                  background: 'transparent',
+                  border: 'none',
+                  resize: 'none',
+                  fontFamily: 'monospace',
+                  fontSize: '1.1rem',
+                  color: 'var(--text-heading)',
+                  outline: 'none',
+                  minHeight: '400px',
                 }}
-                className="custom-scroll"
-              >
-                <textarea
-                  className="form-control"
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    border: 'none',
-                    resize: 'none',
-                    fontFamily: 'monospace',
-                    fontSize: '1.1rem',
-                    color: 'var(--text-heading)',
-                    outline: 'none',
-                    minHeight: '400px',
-                  }}
-                  value={
-                    selectedRequest.requestBody || 'No request body recorded'
-                  }
-                  readOnly={true}
-                />
-              </div>
-            )}
+                value={customMatchRequestBody}
+                onChange={(e) => setCustomMatchRequestBody(e.target.value)}
+                placeholder='e.g. "operationName":"MyMutation" or JSON payload...'
+                data-testid="inspector-request-body-editor"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -613,6 +625,16 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={showConfirmDelete}
+        title="Delete Mock Response"
+        message="Are you sure you want to delete this response mock override rule?"
+        onConfirm={() => {
+          handleRemoveMock();
+          setShowConfirmDelete(false);
+        }}
+        onCancel={() => setShowConfirmDelete(false)}
+      />
     </div>
   );
 };
