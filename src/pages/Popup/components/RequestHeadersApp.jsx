@@ -67,7 +67,7 @@ function RequestHeadersApp() {
       id: generateRandomId(),
       name,
       value,
-      enabled: false,
+      enabled: true,
       urlRegex: '',
       overrideType: overrideType || CONSTANTS.DEFAULT_OVERRIDE_TYPE,
     };
@@ -163,8 +163,15 @@ function RequestHeadersApp() {
     const listener = (changes, namespace) => {
       if (namespace === 'local' && changes[CONSTANTS.STORAGE_KEY]) {
         try {
-          const parsed = JSON.parse(changes[CONSTANTS.STORAGE_KEY].newValue || '[]');
-          setHeaders(parsed);
+          const raw = changes[CONSTANTS.STORAGE_KEY].newValue;
+          if (Array.isArray(raw)) {
+            setHeaders(raw);
+          } else if (typeof raw === 'string') {
+            const parsed = JSON.parse(raw || '[]');
+            setHeaders(parsed);
+          } else {
+            setHeaders([]);
+          }
         } catch (e) {
           setHeaders([]);
         }

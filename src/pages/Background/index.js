@@ -1,12 +1,18 @@
 let requestCollectingEnabled = false;
+let maxStorageSizeMB = 20;
 
 // Initialize setting from storage
 try {
-  chrome.storage.local.get(['requestCollectingEnabled'], (result) => {
+  chrome.storage.local.get(['requestCollectingEnabled', 'maxStorageSizeMB'], (result) => {
     if (result.requestCollectingEnabled !== undefined) {
       requestCollectingEnabled = result.requestCollectingEnabled;
     } else {
       requestCollectingEnabled = false;
+    }
+    if (result.maxStorageSizeMB !== undefined) {
+      maxStorageSizeMB = Number(result.maxStorageSizeMB) || 20;
+    } else {
+      maxStorageSizeMB = 20;
     }
   });
 } catch (e) {}
@@ -14,8 +20,13 @@ try {
 // Watch for changes to the setting
 try {
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'local' && changes.requestCollectingEnabled) {
-      requestCollectingEnabled = changes.requestCollectingEnabled.newValue === true;
+    if (namespace === 'local') {
+      if (changes.requestCollectingEnabled) {
+        requestCollectingEnabled = changes.requestCollectingEnabled.newValue === true;
+      }
+      if (changes.maxStorageSizeMB) {
+        maxStorageSizeMB = Number(changes.maxStorageSizeMB.newValue) || 20;
+      }
     }
   });
 } catch (e) {}
@@ -97,20 +108,42 @@ function processQueue() {
         }
       }
 
-      if (list.length > 1000) {
+      // Truncate individual response body if oversized (>100KB) to prevent storage quota issues
+      list.forEach((item) => {
+        if (item.response && typeof item.response === 'string' && item.response.length > 100000) {
+          item.response = item.response.substring(0, 100000) + '\n... [Response body truncated for storage optimization]';
+        }
+      });
+
+      if (list.length > 250) {
+        list.length = 250;
+      }
+
+      // Enforce maxStorageSizeMB limit (default 20MB)
+      const maxBytes = (maxStorageSizeMB || 20) * 1024 * 1024;
+      while (list.length > 5 && JSON.stringify(list).length > maxBytes) {
         list.pop();
       }
 
-      chrome.storage.local.set({ recentRequests: list }, () => {
-        const setErr = chrome.runtime.lastError;
-        if (setErr) {
-          if (sendResponse)
-            sendResponse({ success: false, error: setErr.message });
-        } else {
-          if (sendResponse) sendResponse({ success: true });
-        }
-        next();
-      });
+      const saveRecentRequests = (itemsToSave) => {
+        chrome.storage.local.set({ recentRequests: itemsToSave }, () => {
+          const setErr = chrome.runtime.lastError;
+          if (setErr) {
+            if (itemsToSave.length > 50) {
+              // Retry with heavily pruned list if storage quota was exceeded
+              saveRecentRequests(itemsToSave.slice(0, 50));
+              return;
+            }
+            if (sendResponse)
+              sendResponse({ success: false, error: setErr.message });
+          } else {
+            if (sendResponse) sendResponse({ success: true });
+          }
+          next();
+        });
+      };
+
+      saveRecentRequests(list);
     });
   };
 

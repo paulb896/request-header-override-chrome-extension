@@ -152,7 +152,11 @@ const InspectorPanel = ({ selectedRequest, onClose, isFullScreen = false }) => {
         newOverrides = [newOverride, ...overrides];
       }
 
-      chrome.storage.local.set({ responseOverrides: newOverrides }, () => {
+      chrome.storage.local.set({
+        responseOverrides: newOverrides,
+        responseOverridesEnabled: true,
+        rho_responseOverridesIsExpanded: true,
+      }, () => {
         setIsMocked(true);
         setMatchedOverrideId(newOverride.id);
         setSaveStatus('saved');

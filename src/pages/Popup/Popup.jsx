@@ -14,6 +14,7 @@ const Popup = ({ isOptionsPage = false }) => {
   const [requestCollectingEnabled, setRequestCollectingEnabledState] = useState(false);
   const [responseOverridesEnabled, setResponseOverridesEnabledState] = useState(false);
   const [requestBodyOverridesEnabled, setRequestBodyOverridesEnabledState] = useState(false);
+  const [maxStorageSizeMB, setMaxStorageSizeMBState] = useState(20);
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ const Popup = ({ isOptionsPage = false }) => {
           'requestCollectingEnabled',
           'responseOverridesEnabled',
           'requestBodyOverridesEnabled',
+          'maxStorageSizeMB',
           'rho_activeTab',
           'rho_selectedRequest',
         ],
@@ -51,6 +53,11 @@ const Popup = ({ isOptionsPage = false }) => {
           } else {
             setRequestBodyOverridesEnabledState(false);
           }
+          if (result.maxStorageSizeMB !== undefined) {
+            setMaxStorageSizeMBState(Number(result.maxStorageSizeMB) || 20);
+          } else {
+            setMaxStorageSizeMBState(20);
+          }
           if (result.rho_activeTab) {
             setActiveTab(result.rho_activeTab);
           }
@@ -71,6 +78,9 @@ const Popup = ({ isOptionsPage = false }) => {
           }
           if (changes.requestBodyOverridesEnabled) {
             setRequestBodyOverridesEnabledState(changes.requestBodyOverridesEnabled.newValue || false);
+          }
+          if (changes.maxStorageSizeMB) {
+            setMaxStorageSizeMBState(Number(changes.maxStorageSizeMB.newValue) || 20);
           }
         }
       };
@@ -129,6 +139,14 @@ const Popup = ({ isOptionsPage = false }) => {
     setRequestBodyOverridesEnabledState(val);
     if (chrome.storage) {
       chrome.storage.local.set({ requestBodyOverridesEnabled: val });
+    }
+  };
+
+  const setMaxStorageSizeMB = (val) => {
+    const num = Math.max(1, Number(val) || 20);
+    setMaxStorageSizeMBState(num);
+    if (chrome.storage) {
+      chrome.storage.local.set({ maxStorageSizeMB: num });
     }
   };
 
@@ -246,6 +264,41 @@ const Popup = ({ isOptionsPage = false }) => {
                   />
                   <span className="switch-slider"></span>
                 </label>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0' }} />
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '1.4rem', fontWeight: '500' }}>Max Storage Size (MB)</span>
+                  <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Maximum local storage quota limit for request logs and mocks (default 20 MB).
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={maxStorageSizeMB}
+                    onChange={(e) => setMaxStorageSizeMB(e.target.value)}
+                    aria-label="Max Storage Size in MB"
+                    style={{
+                      width: '80px',
+                      padding: '6px 10px',
+                      fontSize: '1.2rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--bg-overlay-light)',
+                      color: 'var(--text-color)',
+                    }}
+                  />
+                  <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>MB</span>
+                </div>
               </div>
             </div>
           </div>

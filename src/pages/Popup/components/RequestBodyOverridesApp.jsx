@@ -38,8 +38,17 @@ function RequestBodyOverridesApp({
   useEffect(() => {
     if (chrome.storage) {
       chrome.storage.local.get(['requestBodyOverrides'], (result) => {
-        if (result.requestBodyOverrides) {
-          setOverrides(result.requestBodyOverrides);
+        const val = result.requestBodyOverrides;
+        if (val) {
+          if (Array.isArray(val)) {
+            setOverrides(val);
+          } else if (typeof val === 'string') {
+            try {
+              setOverrides(JSON.parse(val));
+            } catch (e) {
+              setOverrides([]);
+            }
+          }
         }
       });
 
@@ -54,7 +63,18 @@ function RequestBodyOverridesApp({
       const listener = (changes, namespace) => {
         if (namespace === 'local') {
           if (changes.requestBodyOverrides) {
-            setOverrides(changes.requestBodyOverrides.newValue || []);
+            const val = changes.requestBodyOverrides.newValue;
+            if (Array.isArray(val)) {
+              setOverrides(val);
+            } else if (typeof val === 'string') {
+              try {
+                setOverrides(JSON.parse(val || '[]'));
+              } catch (e) {
+                setOverrides([]);
+              }
+            } else {
+              setOverrides([]);
+            }
           }
           if (propEnabled === undefined && changes.requestBodyOverridesEnabled) {
             setLocalEnabled(changes.requestBodyOverridesEnabled.newValue || false);
@@ -85,12 +105,13 @@ function RequestBodyOverridesApp({
       id: generateRandomId(),
       matchUrl: matchUrl.trim(),
       matchRequestBody: matchRequestBody.trim(),
-      overrideRequestBody: overrideRequestBody.trim(),
+      overrideRequestBody: overrideRequestBody,
       active: true,
     };
 
     const nextOverrides = [newOverride, ...overrides];
     updateOverrides(nextOverrides);
+    setIsEnabled(true);
 
     // Reset form
     setMatchUrl('');
@@ -107,13 +128,14 @@ function RequestBodyOverridesApp({
 
   const saveEditing = (id) => {
     if (!editingMatchUrl.trim() || !editingOverrideRequestBody.trim()) return;
+
     const nextOverrides = overrides.map((o) =>
       o.id === id
         ? {
             ...o,
             matchUrl: editingMatchUrl.trim(),
             matchRequestBody: editingMatchRequestBody.trim(),
-            overrideRequestBody: editingOverrideRequestBody.trim(),
+            overrideRequestBody: editingOverrideRequestBody,
           }
         : o
     );

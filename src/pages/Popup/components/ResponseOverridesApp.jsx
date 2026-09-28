@@ -217,15 +217,46 @@ function ResponseOverridesApp({
 
   useEffect(() => {
     if (!chrome.storage) return;
-    chrome.storage.local.get(['responseOverrides'], (result) => {
-      if (result.responseOverrides) {
-        setOverrides(result.responseOverrides);
+    chrome.storage.local.get(['responseOverrides', 'rho_responseOverridesIsExpanded'], (result) => {
+      const val = result.responseOverrides;
+      let loadedOverrides = [];
+      if (val) {
+        if (Array.isArray(val)) {
+          loadedOverrides = val;
+        } else if (typeof val === 'string') {
+          try {
+            loadedOverrides = JSON.parse(val);
+          } catch (e) {
+            loadedOverrides = [];
+          }
+        }
+      }
+      setOverrides(loadedOverrides);
+
+      if (result.rho_responseOverridesIsExpanded !== undefined) {
+        setIsExpanded(result.rho_responseOverridesIsExpanded);
       }
     });
 
     const listener = (changes, namespace) => {
-      if (namespace === 'local' && changes.responseOverrides) {
-        setOverrides(changes.responseOverrides.newValue || []);
+      if (namespace === 'local') {
+        if (changes.responseOverrides) {
+          const val = changes.responseOverrides.newValue;
+          let newArr = [];
+          if (Array.isArray(val)) {
+            newArr = val;
+          } else if (typeof val === 'string') {
+            try {
+              newArr = JSON.parse(val || '[]');
+            } catch (e) {
+              newArr = [];
+            }
+          }
+          setOverrides(newArr);
+        }
+        if (changes.rho_responseOverridesIsExpanded) {
+          setIsExpanded(changes.rho_responseOverridesIsExpanded.newValue === true);
+        }
       }
     };
     if (chrome.storage && chrome.storage.onChanged) {
@@ -291,6 +322,7 @@ function ResponseOverridesApp({
     }
 
     setShowRequests(false);
+    setIsExpanded(true);
   };
 
   const updateOverrides = (newOverrides) => {
@@ -308,7 +340,7 @@ function ResponseOverridesApp({
       id: generateRandomId(),
       matchUrl: matchUrl.trim(),
       matchRequestBody: matchRequestBody.trim(),
-      mockResponse: mockResponse.trim(),
+      mockResponse: mockResponse,
       status: 200,
       statusText: 'OK',
       contentType: 'application/json',
@@ -316,6 +348,8 @@ function ResponseOverridesApp({
     };
 
     updateOverrides([newOverride, ...overrides]);
+    setIsEnabled(true);
+    setIsExpanded(true);
     setMatchUrl('');
     setMatchRequestBody('');
     setMockResponse('');
@@ -330,13 +364,14 @@ function ResponseOverridesApp({
 
   const saveEditing = (id) => {
     if (!editingMatchUrl.trim() || !editingMockResponse.trim()) return;
+
     const nextOverrides = overrides.map((o) =>
       o.id === id
         ? {
             ...o,
             matchUrl: editingMatchUrl.trim(),
             matchRequestBody: editingMatchRequestBody.trim(),
-            mockResponse: editingMockResponse.trim(),
+            mockResponse: editingMockResponse,
           }
         : o
     );
