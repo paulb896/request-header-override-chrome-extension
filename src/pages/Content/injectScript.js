@@ -2207,6 +2207,11 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
           return;
 
         const newFetch = function (...args) {
+          // Fast path: skip all processing when no features are active
+          if (!responseOverridesEnabled && !requestBodyOverridesEnabled && !requestCollectingEnabled) {
+            return originalFetch.apply(this, args);
+          }
+
           const resource = args[0];
           const rawUrl =
             typeof resource === 'string'
@@ -2330,9 +2335,9 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
           return originalFetch.apply(this, args).then((response) => {
             const contentType = response.headers.get('content-type') || '';
             const shouldReadBody =
-              !contentType ||
+              (!contentType && !url.includes('/signalr/') && !url.includes('/sse')) ||
               contentType.includes('json') ||
-              contentType.includes('text') ||
+              (contentType.includes('text') && !contentType.includes('event-stream')) ||
               contentType.includes('xml') ||
               contentType.includes('graphql') ||
               contentType.includes('javascript') ||
@@ -2364,7 +2369,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
               const clone = response.clone();
               const statusCode = response.status;
 
-              return clone
+              // Fire-and-forget: read body for logging without blocking the caller
+              clone
                 .text()
                 .then((text) => {
                   logResponse(
@@ -2377,21 +2383,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                     responseHeaders,
                     requestBody
                   );
-                  return response;
                 })
-                .catch((e) => {
-                  logResponse(
-                    url,
-                    method,
-                    `[Unable to read response body: ${e.message || e}]`,
-                    contentType,
-                    statusCode,
-                    requestHeaders,
-                    responseHeaders,
-                    requestBody
-                  );
-                  return response;
-                });
+                .catch(() => {});
             } catch (e) {
               logResponse(
                 url,
@@ -2403,8 +2396,8 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
                 responseHeaders,
                 requestBody
               );
-              return response;
             }
+            return response;
           });
         };
 
@@ -2464,6 +2457,11 @@ if (window.__REQUEST_HEADER_OVERRIDE_PATCHED__) {
             };
 
             proto.send = function (...args) {
+              // Fast path: skip all processing when no features are active
+              if (!responseOverridesEnabled && !requestBodyOverridesEnabled && !requestCollectingEnabled) {
+                return originalXhrSend.apply(this, args);
+              }
+
               const body = args[0];
               if (body) {
                 if (typeof body === 'string') {
